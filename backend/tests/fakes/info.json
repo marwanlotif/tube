@@ -1,0 +1,58 @@
+{
+  "id": "abc123",
+  "title": "Test Video",
+  "uploader": "Tester",
+  "duration": 120,
+  "webpage_url": "https://youtube.com/watch?v=abc123",
+  "extractor_key": "Test",
+  "formats": [
+    {
+      "format_id": "137",
+      "ext": "mp4",
+      "vcodec": "avc1.640028",
+      "acodec": "none",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "tbr": 4500,
+      "filesize": 5000000
+    },
+    {
+      "format_id": "140",
+      "ext": "m4a",
+      "vcodec": "none",
+      "acodec": "mp4a.40.2",
+      "abr": 128,
+      "filesize": 1000000
+    },
+    {
+      "format_id": "248",
+      "ext": "webm",
+      "vcodec": "vp9",
+      "acodec": "none",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "tbr": 3000,
+      "filesize": 4000000
+    },
+    {
+      "format_id": "251",
+      "ext": "webm",
+      "vcodec": "none",
+      "acodec": "opus",
+      "abr": 160,
+      "filesize": 1200000
+    },
+    {
+      "format_id": "18",
+      "ext": "mp4",
+      "vcodec": "avc1.42001E",
+      "acodec": "mp4a.40.2",
+      "width": 640,
+      "height": 360,
+      "filesize": 2000000
+    }
+  ],
+  "thumbnails": []
+}

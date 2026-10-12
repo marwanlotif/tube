@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -u
+
+if [ "${1:-}" = "--version" ]; then
+  echo "2026.10.26"
+  exit 0
+fi
+
+for arg in "$@"; do
+  if [ "$arg" = "-J" ]; then
+    cat "${FAKE_YTDLP_INFO:?FAKE_YTDLP_INFO not set}"
+    exit 0
+  fi
+done
+
+outdir=""
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "-P" ]; then outdir="$arg"; fi
+  prev="$arg"
+done
+[ -z "$outdir" ] && outdir="."
+file="$outdir/video.mp4"
+
+echo "PROGRESS {\"status\":\"downloading\",\"downloaded_bytes\":1000,\"total_bytes\":2000,\"speed\":1234.0,\"eta\":1}"
+echo "DEST $file"
+sleep "${FAKE_DELAY:-0}"
+if [ "${FAKE_NO_OUTPUT:-0}" != "1" ]; then
+  printf 'fake-media-data' > "$file"
+fi
+if [ "${FAKE_EXIT:-0}" != "0" ]; then
+  echo "ERROR: fake failure" >&2
+  exit "${FAKE_EXIT}"
+fi
+echo "PROGRESS {\"status\":\"finished\",\"downloaded_bytes\":2000,\"total_bytes\":2000}"
+echo "FINAL $file"
