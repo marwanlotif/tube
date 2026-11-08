@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, inspect, text
 from app.db import migrations
 from app.db.engine import init_db, make_engine
 from app.db.migrations import SCHEMA_VERSION, SchemaTooNew, current_version, migrate
+from tests.conftest import FAKES
 
 V1_DOWNLOADS = """
 CREATE TABLE downloads (
@@ -99,3 +100,64 @@ async def test_init_db_runs_migrations(config):
     async with engine.connect() as conn:
         assert await conn.run_sync(current_version) == migrations.SCHEMA_VERSION
     await engine.dispose()
+
+
+def _schema(conn) -> dict:
+    inspector = inspect(conn)
+    schema = {}
+    for table in sorted(inspector.get_table_names()):
+        schema[table] = {
+            "columns": sorted(
+                (c["name"], str(c["type"]), c["nullable"]) for c in inspector.get_columns(table)
+            ),
+            "indexes": sorted(
+                (i["name"], tuple(i["column_names"])) for i in inspector.get_indexes(table)
+            ),
+            # Read what SQLite enforces: the inspector does not parse ON DELETE from a
+            # column-level REFERENCES clause (as ALTER TABLE ADD COLUMN writes it).
+            "foreign_keys": sorted(
+                tuple(fk[2:7])  # table, from, to, on_update, on_delete
+                for fk in conn.exec_driver_sql(f"PRAGMA foreign_key_list({table})")
+            ),
+        }
+    return schema
+
+
+def _seed_real_v1(engine) -> None:
+    ddl = (FAKES / "schema_v1.sql").read_text()
+    with engine.begin() as conn:
+        for statement in ddl.split(";"):
+            body = "\n".join(
+                line for line in statement.splitlines() if not line.startswith("--")
+            ).strip()
+            if body:
+                conn.exec_driver_sql(body)
+        conn.exec_driver_sql(
+            "INSERT INTO downloads (id, url, mode, status, downloaded_bytes, progress, "
+            "attempts, job_spec, resumable, created_at) VALUES ('old', 'https://x.test/v', "
+            "'video', 'completed', 10, 100.0, 0, '{}', 0, '2026-01-01 00:00:00')"
+        )
+        conn.exec_driver_sql("PRAGMA user_version=1")
+
+
+def test_upgraded_v1_database_matches_a_fresh_schema(engine, tmp_path):
+    _seed_real_v1(engine)
+    with engine.begin() as conn:
+        assert migrate(conn) == SCHEMA_VERSION
+
+    fresh = create_engine(f"sqlite:///{tmp_path / 'fresh.sqlite3'}")
+    with fresh.begin() as conn:
+        migrate(conn)
+    with engine.connect() as upgraded, fresh.connect() as created:
+        assert _schema(upgraded) == _schema(created)
+    fresh.dispose()
+
+
+def test_v2_keeps_existing_downloads_as_standalone(engine):
+    _seed_real_v1(engine)
+    with engine.begin() as conn:
+        migrate(conn)
+        row = conn.execute(
+            text("SELECT url, status, collection_id, playlist_index FROM downloads")
+        ).one()
+    assert tuple(row) == ("https://x.test/v", "completed", None, None)
