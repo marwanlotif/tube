@@ -2,16 +2,17 @@ import { Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import type { DownloadOut } from "@/api/models";
-import { useDownloads, useStats } from "@/api/queries";
+import { useCollections, useDownloads, useStats } from "@/api/queries";
+import { CollectionCard } from "@/components/downloads/CollectionCard";
 import { DownloadCard } from "@/components/downloads/DownloadCard";
 import { StatsBar } from "@/components/downloads/StatsBar";
+import {
+  buildTimeline,
+  countByFilter,
+  type Filter,
+  matches,
+} from "@/components/downloads/timeline";
 import { cn } from "@/lib/utils";
-
-type Filter = "all" | "active" | "completed" | "failed";
-
-const ACTIVE = new Set(["queued", "extracting", "downloading", "processing", "verifying"]);
-const FAILED = new Set(["failed", "canceled", "interrupted"]);
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
@@ -20,35 +21,20 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "failed", label: "Needs attention" },
 ];
 
-function matches(download: DownloadOut, filter: Filter): boolean {
-  if (filter === "all") return true;
-  if (filter === "active") return ACTIVE.has(download.status);
-  if (filter === "completed") return download.status === "completed";
-  return FAILED.has(download.status);
-}
-
 export function DownloadsPage() {
-  const { data, isLoading, isError, error } = useDownloads();
+  const downloads = useDownloads({ standalone: true });
+  const collections = useCollections();
   const { data: stats } = useStats();
   const [filter, setFilter] = useState<Filter>("all");
 
-  const items = useMemo(() => {
-    const rows = [...(data?.items ?? [])];
-    rows.sort((a, b) => {
-      const activeDelta = Number(ACTIVE.has(b.status)) - Number(ACTIVE.has(a.status));
-      if (activeDelta !== 0) return activeDelta;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-    return rows;
-  }, [data]);
-
-  const counts: Record<Filter, number> = {
-    all: items.length,
-    active: items.filter((item) => ACTIVE.has(item.status)).length,
-    completed: items.filter((item) => item.status === "completed").length,
-    failed: items.filter((item) => FAILED.has(item.status)).length,
-  };
-  const visible = items.filter((item) => matches(item, filter));
+  const rows = useMemo(
+    () => buildTimeline(downloads.data?.items ?? [], collections.data?.items ?? []),
+    [downloads.data, collections.data],
+  );
+  const counts = countByFilter(rows);
+  const visible = rows.filter((row) => matches(row, filter));
+  const isLoading = downloads.isLoading || collections.isLoading;
+  const error = downloads.error ?? collections.error;
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-5">
@@ -101,7 +87,7 @@ export function DownloadsPage() {
         <div className="flex items-center justify-center gap-2 rounded-xl border border-edge-soft bg-panel/40 py-16 text-sm text-muted">
           <Loader2 size={15} className="animate-spin" /> Loading downloads
         </div>
-      ) : isError ? (
+      ) : error ? (
         <div className="rounded-xl border border-[#3d2020] bg-[#1c1010] p-5 text-sm text-danger">
           Could not load downloads: {error instanceof Error ? error.message : "unknown error"}
         </div>
@@ -132,9 +118,13 @@ export function DownloadsPage() {
         </div>
       ) : (
         <div className="space-y-2.5">
-          {visible.map((download) => (
-            <DownloadCard key={download.id} download={download} />
-          ))}
+          {visible.map((row) =>
+            row.type === "collection" ? (
+              <CollectionCard key={row.id} collection={row.collection} />
+            ) : (
+              <DownloadCard key={row.id} download={row.download} />
+            ),
+          )}
         </div>
       )}
     </div>
