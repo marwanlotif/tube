@@ -44,7 +44,8 @@ def looks_like_playlist_member(url: str) -> bool:
     return bool(query.get("list")) and bool(query.get("v"))
 
 
-def validate_url(raw: str, resolver=socket.getaddrinfo) -> str:
+def normalize_url(raw: str) -> str:
+    """Syntax checks only (no network): http(s), no credentials, bounded length."""
     raw = (raw or "").strip()
     if not raw or len(raw) > MAX_URL_LENGTH:
         raise AppError("INVALID_URL", "Enter a valid URL")
@@ -53,5 +54,12 @@ def validate_url(raw: str, resolver=socket.getaddrinfo) -> str:
         raise AppError("INVALID_URL", "Only http and https URLs are supported")
     if parts.username or parts.password:
         raise AppError("INVALID_URL", "URLs with credentials are not supported")
-    assert_public_host(parts.hostname or "", resolver)
+    if not parts.hostname:
+        raise AppError("INVALID_URL", "URL has no hostname")
     return urlunsplit((parts.scheme, parts.netloc, parts.path or "/", parts.query, ""))
+
+
+def validate_url(raw: str, resolver=socket.getaddrinfo) -> str:
+    url = normalize_url(raw)
+    assert_public_host(urlsplit(url).hostname or "", resolver)
+    return url
