@@ -163,9 +163,7 @@ class DownloadManager:
         while not self._stopping:
             download_id = await self.queue.get()
             try:
-                row = await self.repo.get(download_id)
-                if row and row.status == Status.QUEUED.value:
-                    await self._run(download_id)
+                await self._run(download_id)
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -203,17 +201,31 @@ class DownloadManager:
         log.info("recovery complete: %s active row(s)", len(rows))
 
     async def _run(self, download_id: str) -> None:
+        # A job id can sit in the queue more than once (e.g. canceled while queued, then
+        # retried). Checking and registering without an await in between keeps a second
+        # worker from starting it while the first one is still running.
+        if download_id in self.runtimes:
+            return
         runtime = JobRuntime()
         self.runtimes[download_id] = runtime
-        row = await self.repo.get(download_id)
-        current = Status(row.status)
         try:
+            row = await self.repo.get(download_id)
+            if row is None or row.status != Status.QUEUED.value:
+                return
             spec = dict(row.job_spec or {})
+            revalidate = bool(spec.get("revalidate"))
+            if revalidate:
+                claimed = await self.repo.claim(download_id, Event.START)
+            else:
+                claimed = await self.repo.claim(
+                    download_id, Event.SPAWN, started_at=utcnow(), pid=None
+                )
+            if claimed is None:
+                return  # canceled or claimed elsewhere since it was queued
+            current = Status(claimed.status)
             self._validate_spec(spec)
 
-            if spec.get("revalidate"):
-                await self.repo.transition(download_id, Event.START)
-                current = Status.EXTRACTING
+            if revalidate:
                 if runtime.canceled:
                     await self._finish_canceled(download_id, runtime, current)
                     return
@@ -237,7 +249,7 @@ class DownloadManager:
                     "video_id": resolved.video_id,
                     "audio_id": resolved.audio_id,
                 }
-                row = await self.repo.transition(
+                await self.repo.transition(
                     download_id,
                     Event.SPAWN,
                     job_spec=spec,
@@ -245,10 +257,6 @@ class DownloadManager:
                     format_label=resolved.label,
                     container=resolved.container,
                     started_at=utcnow(),
-                )
-            else:
-                row = await self.repo.transition(
-                    download_id, Event.SPAWN, started_at=utcnow(), pid=None
                 )
             current = Status.DOWNLOADING
 

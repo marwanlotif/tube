@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.db.tables import DownloadRow, SettingsRow, utcnow
@@ -55,6 +55,23 @@ class DownloadRepo:
             for key, value in fields.items():
                 setattr(row, key, value)
         return row
+
+    async def claim(self, download_id: str, event: Event, **fields: Any) -> DownloadRow | None:
+        """Atomically move a queued job forward.
+
+        Returns ``None`` when the job is no longer queued (another worker claimed it, or it
+        was canceled in the meantime), so exactly one caller ever starts a given job.
+        """
+        target = apply(Status.QUEUED, event).value
+        async with self.sessions.begin() as session:
+            result = await session.execute(
+                update(DownloadRow)
+                .where(DownloadRow.id == download_id, DownloadRow.status == Status.QUEUED.value)
+                .values(status=target, **fields)
+            )
+            if result.rowcount != 1:
+                return None
+            return await session.get(DownloadRow, download_id)
 
     async def update_progress(self, download_id: str, **fields: Any) -> None:
         async with self.sessions.begin() as session:
