@@ -241,7 +241,14 @@ class DownloadManager:
                     spec.get("audio_id"),
                 )
                 if resolved is None:
+                    if not spec.get("selector"):
+                        # Never resolved before: a playlist item whose preset does not fit.
+                        raise AppError(
+                            "PRESET_UNAVAILABLE", "That quality is not available for this video"
+                        )
                     raise AppError("FORMAT_STALE", "No compatible format is available anymore")
+                if resolved.requires_merge and not self.runner.ffmpeg:
+                    raise AppError("FFMPEG_MISSING", "ffmpeg is needed to merge these formats")
                 spec.update(
                     selector=resolved.selector,
                     container=resolved.container,
@@ -253,15 +260,28 @@ class DownloadManager:
                     "video_id": resolved.video_id,
                     "audio_id": resolved.audio_id,
                 }
-                await self.repo.transition(
+                row = await self.repo.transition(
                     download_id,
                     Event.SPAWN,
                     job_spec=spec,
                     format_selector=resolved.selector,
                     format_label=resolved.label,
-                    container=resolved.container,
+                    # Audio jobs are labelled by the format they are converted to.
+                    container=(
+                        spec.get("audio_format") or "mp3"
+                        if spec.get("mode") == "audio"
+                        else resolved.container
+                    ),
                     started_at=utcnow(),
+                    # Playlist items are queued from a flat listing; fill in the details.
+                    title=info.title,
+                    uploader=info.uploader,
+                    duration_s=info.duration_s,
+                    video_id=info.id or row.video_id,
+                    site=info.site or row.site,
+                    thumbnail_name=info.thumbnail_name or row.thumbnail_name,
                 )
+                await self._broadcast(row)
             current = Status.DOWNLOADING
 
             if runtime.canceled:
@@ -474,7 +494,9 @@ class DownloadManager:
         if not any(is_within(path, root) for root in self.config.media_roots):
             raise AppError("SPEC_INVALID", "Download output directory is not allowed")
         validate_template(spec.get("filename_template", ""))
-        if not spec.get("selector"):
+        # A revalidating job resolves its formats when it runs (always the case for
+        # playlist items), so only a job that skips extraction needs a selector up front.
+        if not spec.get("selector") and not spec.get("revalidate"):
             raise AppError("SPEC_INVALID", "Download format selector is missing")
 
     async def _broadcast(self, row) -> None:
