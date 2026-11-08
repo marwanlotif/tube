@@ -40,7 +40,9 @@ def create_app(config: Config | None = None) -> FastAPI:
         binaries = Binaries(config)
         await binaries.probe()
         extractor = Extractor(
-            binaries.ytdlp or config.ytdlp_path or "yt-dlp", config.thumbnails_dir
+            binaries.ytdlp or config.ytdlp_path or "yt-dlp",
+            config.thumbnails_dir,
+            max_entries=config.max_collection_entries,
         )
         runner = Runner(binaries.ytdlp or "yt-dlp", binaries.ffmpeg)
         events = EventBus()

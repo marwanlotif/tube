@@ -10,12 +10,30 @@ if [ "${1:-}" = "--version" ]; then
   exit 0
 fi
 
+url="${*: -1}"
+probe=0
+yes_playlist=0
 for arg in "$@"; do
-  if [ "$arg" = "-J" ]; then
-    cat "${FAKE_YTDLP_INFO:?FAKE_YTDLP_INFO not set}"
-    exit 0
-  fi
+  [ "$arg" = "-J" ] && probe=1
+  [ "$arg" = "--yes-playlist" ] && yes_playlist=1
 done
+
+if [ "$probe" = "1" ]; then
+  # Mirror yt-dlp's routing: channels and playlists come back as listings, and a link
+  # naming both a video and a playlist is the video unless --yes-playlist is given.
+  case "$url" in
+    *"/@"*) cat "${FAKE_YTDLP_CHANNEL_INFO:?FAKE_YTDLP_CHANNEL_INFO not set}" ;;
+    *"watch?"*"list="*)
+      if [ "$yes_playlist" = "1" ]; then
+        cat "${FAKE_YTDLP_PLAYLIST_INFO:?FAKE_YTDLP_PLAYLIST_INFO not set}"
+      else
+        cat "${FAKE_YTDLP_INFO:?FAKE_YTDLP_INFO not set}"
+      fi ;;
+    *"list="*) cat "${FAKE_YTDLP_PLAYLIST_INFO:?FAKE_YTDLP_PLAYLIST_INFO not set}" ;;
+    *) cat "${FAKE_YTDLP_INFO:?FAKE_YTDLP_INFO not set}" ;;
+  esac
+  exit 0
+fi
 
 outdir=""
 prev=""

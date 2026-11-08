@@ -75,12 +75,27 @@ class Binaries:
         return self.ffmpeg
 
 
-def info_argv(binary: str, url: str, cookies_from_browser: str | None = None) -> list[str]:
+def info_argv(
+    binary: str,
+    url: str,
+    cookies_from_browser: str | None = None,
+    playlist: bool = False,
+    max_entries: int = 500,
+) -> list[str]:
+    """Probe a link. Single videos come back with formats; playlists and channels come back
+    as a flat listing (no per-entry extraction), capped at ``max_entries``.
+
+    ``playlist`` only matters for links that name both a video and a playlist (for example
+    ``watch?v=…&list=…``): by default the video wins, as it does for downloads.
+    """
     argv = [
         binary,
         "--ignore-config",
         "-J",
-        "--no-playlist",
+        "--flat-playlist",
+        "--playlist-items",
+        f"1:{max_entries}",
+        "--yes-playlist" if playlist else "--no-playlist",
         "--no-warnings",
         "--socket-timeout",
         "20",

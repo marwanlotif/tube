@@ -124,7 +124,9 @@ def _listing_kind(payload: dict) -> str:
 def parse_collection(payload: dict, limit: int) -> CollectionListing:
     """Normalise a flat listing. ``limit`` is the entry cap the listing was requested with."""
     parent_extractor = payload.get("extractor_key")
-    raw_entries = payload.get("entries") or []
+    # Sliced defensively: the cap is also passed to yt-dlp, but not every extractor honours
+    # --playlist-items.
+    raw_entries = (payload.get("entries") or [])[:limit]
     entries: list[CollectionEntry] = []
     seen: set[tuple[str, str]] = set()
 

@@ -1,9 +1,20 @@
 from datetime import UTC
 
 from app.db.tables import DownloadRow
-from app.domain.formats import FormatOption
-from app.schemas.video import DownloadOut, FormatOut, PresetOut, VideoInfoOut
-from app.services.extractor import VideoInfo
+from app.domain.formats import FormatOption, preset_choices
+from app.schemas.video import (
+    CollectionEntryOut,
+    CollectionInfoOut,
+    DownloadOut,
+    FormatOut,
+    PresetOut,
+    VideoInfoOut,
+)
+from app.services.extractor import CollectionInfo, VideoInfo
+
+
+def _thumbnail_url(name: str | None) -> str | None:
+    return f"/api/media/thumbnails/{name}" if name else None
 
 
 def _aware(value):
@@ -20,9 +31,7 @@ def download_out(row: DownloadRow) -> dict:
         video_id=row.video_id,
         title=row.title,
         uploader=row.uploader,
-        thumbnail_url=(
-            f"/api/media/thumbnails/{row.thumbnail_name}" if row.thumbnail_name else None
-        ),
+        thumbnail_url=_thumbnail_url(row.thumbnail_name),
         duration_s=row.duration_s,
         mode=row.mode,
         status=row.status,
@@ -72,10 +81,39 @@ def video_out(video: VideoInfo) -> dict:
         uploader=video.uploader,
         duration_s=video.duration_s,
         webpage_url=video.webpage_url,
-        thumbnail_url=(
-            f"/api/media/thumbnails/{video.thumbnail_name}" if video.thumbnail_name else None
-        ),
+        thumbnail_url=_thumbnail_url(video.thumbnail_name),
         is_live=video.is_live,
         formats=[format_out(f) for f in video.formats],
         presets=[PresetOut(**p) for p in video.presets],
+        playlist_hint=video.playlist_hint,
+    ).model_dump()
+
+
+def collection_info_out(info: CollectionInfo, max_entries: int) -> dict:
+    listing = info.listing
+    return CollectionInfoOut(
+        id=listing.id,
+        collection_type=listing.kind,
+        title=listing.title,
+        uploader=listing.uploader,
+        site=listing.site,
+        webpage_url=listing.webpage_url,
+        thumbnail_url=_thumbnail_url(info.thumbnail_name),
+        total=listing.total,
+        truncated=listing.truncated,
+        max_entries=max_entries,
+        entries=[
+            CollectionEntryOut(
+                id=e.id,
+                index=e.index,
+                title=e.title,
+                url=e.url,
+                duration_s=e.duration_s,
+                kind=e.kind,
+                available=e.available,
+                reason=e.reason,
+            )
+            for e in listing.entries
+        ],
+        presets=[PresetOut(**p) for p in preset_choices()],
     ).model_dump()

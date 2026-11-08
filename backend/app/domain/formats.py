@@ -286,36 +286,36 @@ def resolve_custom(
     return _resolve_pair(video, None)
 
 
-PRESET_KEYS = [
-    "best_2160",
-    "best_1440",
-    "best_1080",
-    "best_720",
-    "best_480",
-    "best_quality",
-    "webm_1080",
-    "audio",
-]
+PRESET_LABELS = {
+    "best_2160": "Up to 4K",
+    "best_1440": "Up to 1440p",
+    "best_1080": "Up to 1080p",
+    "best_720": "Up to 720p",
+    "best_480": "Up to 480p",
+    "best_quality": "Best quality",
+    "webm_1080": "WebM up to 1080p",
+    "audio": "Audio only",
+}
+PRESET_KEYS = list(PRESET_LABELS)
+
+
+def preset_choices() -> list[dict]:
+    """Presets offered before any formats are known, e.g. for a whole playlist.
+
+    Each item resolves its preset when its job runs; "up to" presets fall back to the best
+    lower resolution, so they are all offered as available.
+    """
+    return [{"key": key, "label": label, "available": True} for key, label in PRESET_LABELS.items()]
 
 
 def preset_list(options: list[FormatOption]) -> list[dict]:
-    labels = {
-        "best_2160": "Up to 4K",
-        "best_1440": "Up to 1440p",
-        "best_1080": "Up to 1080p",
-        "best_720": "Up to 720p",
-        "best_480": "Up to 480p",
-        "best_quality": "Best quality",
-        "webm_1080": "WebM up to 1080p",
-        "audio": "Audio only",
-    }
     result = []
     for key in PRESET_KEYS:
         resolved = resolve_preset(options, key)
         result.append(
             {
                 "key": key,
-                "label": labels[key],
+                "label": PRESET_LABELS[key],
                 "available": resolved is not None,
                 "container": resolved.container if resolved else None,
                 "height": resolved.height if resolved else None,
