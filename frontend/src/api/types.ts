@@ -13,7 +13,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Video Info */
+        /**
+         * Video Info
+         * @description Describe a link: a single video with its formats, or a playlist/channel listing.
+         */
         post: operations["video_info_api_videos_info_post"];
         delete?: never;
         options?: never;
@@ -102,6 +105,76 @@ export interface paths {
         put?: never;
         /** Reveal Download */
         post: operations["reveal_download_api_downloads__download_id__reveal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Collections */
+        get: operations["list_collections_api_collections_get"];
+        put?: never;
+        /** Create Collection */
+        post: operations["create_collection_api_collections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/collections/{collection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Collection */
+        get: operations["get_collection_api_collections__collection_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Collection */
+        delete: operations["delete_collection_api_collections__collection_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/collections/{collection_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Collection */
+        post: operations["cancel_collection_api_collections__collection_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/collections/{collection_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Collection */
+        post: operations["retry_collection_api_collections__collection_id__retry_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -228,6 +301,196 @@ export interface components {
              */
             quality: string;
         };
+        /** CollectionCreate */
+        CollectionCreate: {
+            /** Url */
+            url: string;
+            /** Entry Ids */
+            entry_ids: string[];
+            /**
+             * Mode
+             * @default video
+             * @enum {string}
+             */
+            mode: "video" | "audio";
+            /** Preset */
+            preset?: string | null;
+            /** Audio Format */
+            audio_format?: ("mp3" | "m4a" | "flac" | "wav" | "opus") | null;
+            /** Subtitles */
+            subtitles?: boolean | null;
+            /** Subtitle Langs */
+            subtitle_langs?: string | null;
+            /**
+             * Subfolder
+             * @default true
+             */
+            subfolder: boolean;
+            /**
+             * Skip Existing
+             * @default true
+             */
+            skip_existing: boolean;
+        };
+        /** CollectionCreated */
+        CollectionCreated: {
+            collection: components["schemas"]["CollectionOut"];
+            /** Created */
+            created: number;
+            skipped: components["schemas"]["CollectionSkipped"];
+        };
+        /** CollectionEntryOut */
+        CollectionEntryOut: {
+            /** Id */
+            id: string;
+            /** Index */
+            index: number;
+            /** Title */
+            title: string;
+            /** Url */
+            url?: string | null;
+            /** Duration S */
+            duration_s?: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "video" | "collection";
+            /** Available */
+            available: boolean;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** CollectionInfoOut */
+        CollectionInfoOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "collection";
+            /** Id */
+            id: string;
+            /**
+             * Collection Type
+             * @enum {string}
+             */
+            collection_type: "playlist" | "channel";
+            /** Title */
+            title: string;
+            /** Uploader */
+            uploader: string | null;
+            /** Site */
+            site: string | null;
+            /** Webpage Url */
+            webpage_url: string;
+            /** Thumbnail Url */
+            thumbnail_url: string | null;
+            /** Total */
+            total: number | null;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /** Max Entries */
+            max_entries: number;
+            /** Entries */
+            entries: components["schemas"]["CollectionEntryOut"][];
+            /** Presets */
+            presets: components["schemas"]["PresetOut"][];
+        };
+        /** CollectionList */
+        CollectionList: {
+            /** Items */
+            items: components["schemas"]["CollectionOut"][];
+            /** Total */
+            total: number;
+        };
+        /** CollectionOut */
+        CollectionOut: {
+            /** Id */
+            id: string;
+            /** Url */
+            url: string;
+            /**
+             * Collection Type
+             * @enum {string}
+             */
+            collection_type: "playlist" | "channel";
+            /** Title */
+            title: string | null;
+            /** Uploader */
+            uploader: string | null;
+            /** Site */
+            site: string | null;
+            /** Thumbnail Url */
+            thumbnail_url: string | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "video" | "audio";
+            /** Preset Key */
+            preset_key: string | null;
+            /** Output Dir */
+            output_dir: string | null;
+            /** Entry Total */
+            entry_total: number;
+            /** Item Total */
+            item_total: number;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /**
+             * Active Total
+             * @default 0
+             */
+            active_total: number;
+            /**
+             * Completed Total
+             * @default 0
+             */
+            completed_total: number;
+            /**
+             * Failed Total
+             * @default 0
+             */
+            failed_total: number;
+            /**
+             * Progress
+             * @default 0
+             */
+            progress: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** CollectionSkipped */
+        CollectionSkipped: {
+            /**
+             * Not Found
+             * @default 0
+             */
+            not_found: number;
+            /**
+             * Unavailable
+             * @default 0
+             */
+            unavailable: number;
+            /**
+             * Blocked
+             * @default 0
+             */
+            blocked: number;
+            /**
+             * Already Downloaded
+             * @default 0
+             */
+            already_downloaded: number;
+        };
         /** DownloadCreate */
         DownloadCreate: {
             /** Url */
@@ -331,6 +594,10 @@ export interface components {
             started_at?: string | null;
             /** Finished At */
             finished_at?: string | null;
+            /** Collection Id */
+            collection_id?: string | null;
+            /** Playlist Index */
+            playlist_index?: number | null;
         };
         /** FormatOut */
         FormatOut: {
@@ -548,20 +815,25 @@ export interface components {
         };
         /** VideoInfoOut */
         VideoInfoOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "video";
             /** Id */
             id: string;
             /** Site */
-            site?: string | null;
+            site: string | null;
             /** Title */
             title: string;
             /** Uploader */
-            uploader?: string | null;
+            uploader: string | null;
             /** Duration S */
-            duration_s?: number | null;
+            duration_s: number | null;
             /** Webpage Url */
             webpage_url: string;
             /** Thumbnail Url */
-            thumbnail_url?: string | null;
+            thumbnail_url: string | null;
             /**
              * Is Live
              * @default false
@@ -571,11 +843,21 @@ export interface components {
             formats: components["schemas"]["FormatOut"][];
             /** Presets */
             presets: components["schemas"]["PresetOut"][];
+            /**
+             * Playlist Hint
+             * @default false
+             */
+            playlist_hint: boolean;
         };
         /** VideoInfoRequest */
         VideoInfoRequest: {
             /** Url */
             url: string;
+            /**
+             * Playlist
+             * @default false
+             */
+            playlist: boolean;
         };
         /** VideoSettings */
         VideoSettings: {
@@ -623,7 +905,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VideoInfoOut"];
+                    "application/json": components["schemas"]["VideoInfoOut"] | components["schemas"]["CollectionInfoOut"];
                 };
             };
             /** @description Validation Error */
@@ -643,6 +925,9 @@ export interface operations {
                 status?: string | null;
                 limit?: number;
                 offset?: number;
+                collection_id?: string | null;
+                /** @description Only downloads that are not part of a collection */
+                standalone?: boolean;
             };
             header?: never;
             path?: never;
@@ -844,6 +1129,195 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_collections_api_collections_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_collection_api_collections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_collection_api_collections__collection_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_collection_api_collections__collection_id__delete: {
+        parameters: {
+            query?: {
+                delete_files?: boolean;
+            };
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_collection_api_collections__collection_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_collection_api_collections__collection_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionOut"];
+                };
             };
             /** @description Validation Error */
             422: {

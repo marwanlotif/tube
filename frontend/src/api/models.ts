@@ -9,6 +9,18 @@ export type Stats = components["schemas"]["StatsOut"];
 export type SystemInfo = components["schemas"]["SystemOut"];
 export type SettingsBase = components["schemas"]["SettingsModel"];
 
+export type CollectionInfo = components["schemas"]["CollectionInfoOut"];
+export type CollectionEntry = components["schemas"]["CollectionEntryOut"];
+export type Collection = components["schemas"]["CollectionOut"];
+export type CollectionList = components["schemas"]["CollectionList"];
+export type CollectionCreated = components["schemas"]["CollectionCreated"];
+export type CreateCollection = components["schemas"]["CollectionCreate"];
+/** What a pasted link turned out to be: one video, or a playlist/channel listing. */
+export type ProbeResult = VideoInfo | CollectionInfo;
+
+/** Which downloads a list query holds. */
+export type DownloadFilter = { standalone?: boolean; collectionId?: string };
+
 export type VideoSettings = components["schemas"]["VideoSettings"];
 export type AudioSettings = components["schemas"]["AudioSettings"];
 export type SubtitleSettings = components["schemas"]["SubtitleSettings"];
@@ -44,5 +56,5 @@ export type CreateDownload = {
 };
 
 export type ApiErrorBody = {
-  error?: { code?: string; message?: string };
+  error?: { code?: string; message?: string; details?: Record<string, unknown> };
 };

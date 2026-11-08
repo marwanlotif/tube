@@ -3,7 +3,15 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { getToken } from "@/api/client";
 import { queryKeys } from "@/api/queries";
-import type { DownloadList, DownloadOut } from "@/api/models";
+import type { Collection, CollectionList, DownloadList, DownloadOut } from "@/api/models";
+
+import {
+  filterOf,
+  removeCollection,
+  removeDownload,
+  upsertCollection,
+  upsertDownload,
+} from "./cache";
 
 const RealtimeContext = createContext(false);
 
@@ -16,6 +24,9 @@ type Message =
   | { type: "download.updated"; download: DownloadOut }
   | { type: "download.deleted"; id: string }
   | { type: "stats.updated" }
+  | { type: "collection.created"; collection: Collection }
+  | { type: "collection.updated"; collection: Collection }
+  | { type: "collection.deleted"; id: string }
   | { type: "pong" };
 
 export function RealtimeProvider({ children }: { children: React.ReactNode }) {
@@ -29,47 +40,53 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     let disposed = false;
     let attempt = 0;
 
-    const patchList = (updater: (list: DownloadList) => DownloadList) => {
-      queryClient.setQueriesData<DownloadList>(
-        { queryKey: queryKeys.downloads },
-        (old) => (old ? updater(old) : old),
+    // Each cached download list is updated according to its own filter.
+    const patchLists = (
+      updater: (list: DownloadList, key: readonly unknown[]) => DownloadList,
+    ) => {
+      for (const [key, list] of queryClient.getQueriesData<DownloadList>({
+        queryKey: queryKeys.downloads,
+      })) {
+        if (list) queryClient.setQueryData(key, updater(list, key));
+      }
+    };
+    const patchCollections = (updater: (list: CollectionList) => CollectionList) => {
+      queryClient.setQueryData<CollectionList>(queryKeys.collections, (old) =>
+        old ? updater(old) : old,
       );
     };
 
     const handle = (message: Message) => {
-      if (message.type === "snapshot") {
-        setConnected(true);
-        attempt = 0;
-        queryClient.invalidateQueries({ queryKey: queryKeys.downloads });
-        queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-        return;
-      }
-      if (message.type === "download.updated") {
-        const download = message.download;
-        patchList((list) => {
-          const exists = list.items.some((item) => item.id === download.id);
-          return {
-            ...list,
-            items: exists
-              ? list.items.map((item) => (item.id === download.id ? download : item))
-              : [download, ...list.items],
-            total: exists ? list.total : list.total + 1,
-          };
-        });
-        queryClient.setQueryData(["download", download.id], download);
-        return;
-      }
-      if (message.type === "download.deleted") {
-        patchList((list) => ({
-          ...list,
-          items: list.items.filter((item) => item.id !== message.id),
-          total: Math.max(0, list.total - 1),
-        }));
-        queryClient.removeQueries({ queryKey: ["download", message.id] });
-        return;
-      }
-      if (message.type === "stats.updated") {
-        queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      switch (message.type) {
+        case "snapshot":
+          setConnected(true);
+          attempt = 0;
+          // Events may have been missed while disconnected: refetch what is cached.
+          queryClient.invalidateQueries({ queryKey: queryKeys.downloads });
+          queryClient.invalidateQueries({ queryKey: queryKeys.collections });
+          queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+          return;
+        case "download.updated":
+          patchLists((list, key) => upsertDownload(list, message.download, filterOf(key)));
+          queryClient.setQueryData(["download", message.download.id], message.download);
+          return;
+        case "download.deleted":
+          patchLists((list) => removeDownload(list, message.id));
+          queryClient.removeQueries({ queryKey: ["download", message.id] });
+          return;
+        case "collection.created":
+        case "collection.updated":
+          patchCollections((list) => upsertCollection(list, message.collection));
+          return;
+        case "collection.deleted":
+          patchCollections((list) => removeCollection(list, message.id));
+          queryClient.removeQueries({
+            queryKey: queryKeys.downloadList({ collectionId: message.id }),
+          });
+          return;
+        case "stats.updated":
+          queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+          return;
       }
     };
 

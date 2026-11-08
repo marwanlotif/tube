@@ -1,8 +1,14 @@
 import type {
+  Collection,
+  CollectionCreated,
+  CollectionList,
+  CreateCollection,
   CreateDownload,
+  DownloadFilter,
   DownloadList,
   DownloadOut,
   ApiErrorBody,
+  ProbeResult,
   Settings,
   Stats,
   SystemInfo,
@@ -12,11 +18,18 @@ import type {
 export class ApiError extends Error {
   status: number;
   code?: string;
+  details?: Record<string, unknown>;
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    details?: Record<string, unknown>,
+  ) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -44,6 +57,20 @@ export function getToken(): Promise<string> {
   return tokenPromise;
 }
 
+export function downloadQuery(filter: DownloadFilter): string {
+  const params = new URLSearchParams();
+  if (filter.collectionId) {
+    // A collection holds at most VID_DWN_MAX_COLLECTION_ENTRIES items (5000 at most);
+    // 500 per page covers the default cap in one request.
+    params.set("collection_id", filter.collectionId);
+    params.set("limit", "500");
+  } else {
+    params.set("limit", "200");
+    if (filter.standalone) params.set("standalone", "true");
+  }
+  return params.toString();
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   const method = (init.method ?? "GET").toUpperCase();
@@ -61,8 +88,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
     throw new ApiError(
       response.status,
-      body?.error?.message ?? response.statusText ?? "Request failed",
+      body?.error?.message || response.statusText || "Request failed",
       body?.error?.code,
+      body?.error?.details,
     );
   }
   if (response.status === 204) return undefined as T;
@@ -76,13 +104,21 @@ export const api = {
       body: JSON.stringify({ url }),
     }),
 
+  /** Describe a link; `playlist` asks for the playlist when it names a video too. */
+  probe: (url: string, playlist = false) =>
+    request<ProbeResult>("/api/videos/info", {
+      method: "POST",
+      body: JSON.stringify({ url, playlist }),
+    }),
+
   createDownload: (payload: CreateDownload) =>
     request<DownloadOut>("/api/downloads", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
-  listDownloads: () => request<DownloadList>("/api/downloads?limit=200"),
+  listDownloads: (filter: DownloadFilter = {}) =>
+    request<DownloadList>(`/api/downloads?${downloadQuery(filter)}`),
   getDownload: (id: string) => request<DownloadOut>(`/api/downloads/${id}`),
 
   cancel: (id: string) =>
@@ -96,6 +132,22 @@ export const api = {
     ),
   reveal: (id: string) =>
     request<void>(`/api/downloads/${id}/reveal`, { method: "POST" }),
+
+  createCollection: (payload: CreateCollection) =>
+    request<CollectionCreated>("/api/collections", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  listCollections: () => request<CollectionList>("/api/collections?limit=200"),
+  cancelCollection: (id: string) =>
+    request<Collection>(`/api/collections/${id}/cancel`, { method: "POST" }),
+  retryCollection: (id: string) =>
+    request<Collection>(`/api/collections/${id}/retry`, { method: "POST" }),
+  removeCollection: (id: string, deleteFiles = false) =>
+    request<void>(
+      `/api/collections/${id}?delete_files=${deleteFiles ? "true" : "false"}`,
+      { method: "DELETE" },
+    ),
 
   getSettings: () => request<Settings>("/api/settings"),
   updateSettings: (settings: Settings) =>
