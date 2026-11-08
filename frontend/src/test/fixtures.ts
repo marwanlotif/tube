@@ -1,4 +1,12 @@
-import type { Collection, DownloadList, DownloadOut } from "@/api/models";
+import type {
+  Collection,
+  DownloadList,
+  DownloadOut,
+  Preset,
+  Settings,
+  VideoFormat,
+  VideoInfo,
+} from "@/api/models";
 
 export function makeDownload(overrides: Partial<DownloadOut> = {}): DownloadOut {
   return {
@@ -60,6 +68,75 @@ export function makeCollection(overrides: Partial<Collection> = {}): Collection 
     failed_total: 0,
     progress: 0,
     created_at: "2026-11-08T10:00:00Z",
+    ...overrides,
+  };
+}
+
+export function makeVideoInfo(overrides: Partial<VideoInfo> = {}): VideoInfo {
+  const preset = (key: string, label: string, extra: Partial<Preset> = {}): Preset => ({
+    key,
+    label,
+    available: true,
+    container: "mp4",
+    height: null,
+    fps: null,
+    vcodec: null,
+    acodec: null,
+    requires_merge: true,
+    estimated_bytes: null,
+    selector_label: null,
+    ...extra,
+  });
+  const format = (extra: Partial<VideoFormat> & Pick<VideoFormat, "format_id" | "kind">) => ({
+    ext: "mp4",
+    vcodec: null,
+    acodec: null,
+    width: null,
+    height: null,
+    fps: null,
+    tbr: null,
+    filesize: null,
+    hdr: false,
+    label: extra.format_id,
+    ...extra,
+  });
+  return {
+    kind: "video",
+    id: "abc123",
+    site: "Youtube",
+    title: "Test Video",
+    uploader: "Tester",
+    duration_s: 120,
+    webpage_url: "https://www.youtube.com/watch?v=abc123",
+    thumbnail_url: null,
+    is_live: false,
+    playlist_hint: false,
+    formats: [
+      format({ format_id: "137", kind: "video", height: 1080, vcodec: "avc1", label: "1080p" }),
+      format({ format_id: "18", kind: "combined", height: 360, label: "360p" }),
+      format({ format_id: "140", kind: "audio", ext: "m4a", acodec: "mp4a", label: "AAC" }),
+    ],
+    presets: [
+      preset("best_1080", "Up to 1080p", { height: 1080, selector_label: "1080p + AAC" }),
+      preset("best_720", "Up to 720p", { height: 720 }),
+      preset("best_2160", "Up to 4K", { available: false }),
+      preset("audio", "Audio only", { container: "m4a", requires_merge: false }),
+    ],
+    ...overrides,
+  };
+}
+
+export function makeSettings(overrides: Partial<Settings> = {}): Settings {
+  return {
+    video_dir: "/media/Videos/VidDwn",
+    audio_dir: "/media/Music/VidDwn",
+    filename_template: "%(title).200B [%(id)s].%(ext)s",
+    video: { max_height: 1080, prefer_codec: "h264", container: "mp4" },
+    audio: { format: "mp3", quality: "0" },
+    subtitles: { enabled: false, langs: "en", auto: false, embed: false },
+    network: { fragments: 4, rate_limit: null, retries: 10, socket_timeout: 30 },
+    cookies_from_browser: null,
+    max_concurrent_downloads: 1,
     ...overrides,
   };
 }

@@ -1,4 +1,4 @@
-import { Check, FileAudio, Film, Loader2, Music2 } from "lucide-react";
+import { FileAudio, Film, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -6,23 +6,24 @@ import type { CreateDownload, VideoInfo } from "@/api/models";
 import { useCreateDownload, useSettings } from "@/api/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Field, Toggle } from "@/components/ui/field";
-import { Input, Select } from "@/components/ui/input";
+import { Field } from "@/components/ui/field";
+import { Select } from "@/components/ui/input";
 import {
-  cn,
   errorMessage,
   formatBytes,
   formatDuration,
   shortContainer,
 } from "@/lib/utils";
 
-const AUDIO_FORMATS = [
-  { value: "mp3", label: "MP3 — compatible" },
-  { value: "m4a", label: "M4A — AAC" },
-  { value: "opus", label: "Opus — efficient" },
-  { value: "flac", label: "FLAC — lossless" },
-  { value: "wav", label: "WAV — uncompressed" },
-];
+import {
+  AudioFormatField,
+  type AudioFormat,
+  type DownloadMode,
+  ModeToggle,
+  PresetGrid,
+  SubtitleOptions,
+  useDownloadOverrides,
+} from "./DownloadOptions";
 
 function presetsFor(video: VideoInfo) {
   return video.presets.filter((preset) => preset.key !== "audio");
@@ -33,14 +34,13 @@ export function FormatPicker({ video }: { video: VideoInfo }) {
   const create = useCreateDownload();
   const navigate = useNavigate();
 
-  const [mode, setMode] = useState<"video" | "audio">("video");
+  const [mode, setMode] = useState<DownloadMode>("video");
   const [preset, setPreset] = useState<string | null>(null);
   const [custom, setCustom] = useState(false);
   const [videoId, setVideoId] = useState("");
   const [audioId, setAudioId] = useState("");
-  const [audioFormatOverride, setAudioFormatOverride] = useState<string | null>(null);
-  const [subsOverride, setSubsOverride] = useState<boolean | null>(null);
-  const [langsOverride, setLangsOverride] = useState<string | null>(null);
+  const overrides = useDownloadOverrides(settings);
+  const { audioFormat, subtitles, subtitleLangs } = overrides;
 
   const presets = presetsFor(video);
   const videoFormats = useMemo(
@@ -64,10 +64,6 @@ export function FormatPicker({ video }: { video: VideoInfo }) {
 
   const effectiveVideoId = videoId || videoFormats[0]?.format_id || "";
   const selectedVideo = videoFormats.find((format) => format.format_id === effectiveVideoId);
-  const audioFormat = audioFormatOverride ?? settings?.audio.format ?? "mp3";
-  const subtitles = subsOverride ?? settings?.subtitles.enabled ?? false;
-  const subtitleLangs = langsOverride ?? settings?.subtitles.langs ?? "en";
-
   const canSubmit =
     !create.isPending &&
     (mode === "audio" || (custom ? Boolean(effectiveVideoId) : Boolean(effectivePreset)));
@@ -77,11 +73,10 @@ export function FormatPicker({ video }: { video: VideoInfo }) {
     const payload: CreateDownload = {
       url: video.webpage_url,
       mode,
-      subtitles: mode === "video" ? subtitles : false,
-      subtitle_langs: mode === "video" && subtitles ? subtitleLangs.trim() || "en" : null,
+      ...overrides.subtitlePayload(mode),
     };
     if (mode === "audio") {
-      payload.audio_format = audioFormat as CreateDownload["audio_format"];
+      payload.audio_format = audioFormat as AudioFormat;
       payload.preset = "audio";
     } else if (custom && effectiveVideoId) {
       payload.video_id = effectiveVideoId;
@@ -94,29 +89,7 @@ export function FormatPicker({ video }: { video: VideoInfo }) {
 
   return (
     <div className="space-y-5">
-      <div className="inline-flex rounded-lg border border-edge bg-surface p-1">
-        {(
-          [
-            { value: "video", label: "Video", icon: Film },
-            { value: "audio", label: "Audio", icon: Music2 },
-          ] as const
-        ).map(({ value, label, icon: Icon }) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setMode(value)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-[13px] font-medium transition-colors",
-              mode === value
-                ? "bg-raised text-ink shadow-sm"
-                : "text-muted hover:text-ink",
-            )}
-          >
-            <Icon size={14} className={mode === value ? "text-accent" : "text-faint"} />
-            {label}
-          </button>
-        ))}
-      </div>
+      <ModeToggle mode={mode} onChange={setMode} />
 
       {mode === "video" ? (
         <div className="space-y-3">
@@ -168,47 +141,7 @@ export function FormatPicker({ video }: { video: VideoInfo }) {
               </Field>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-              {presets.map((option) => {
-                const active = option.key === effectivePreset;
-                return (
-                  <button
-                    key={option.key}
-                    type="button"
-                    disabled={!option.available}
-                    onClick={() => setPreset(option.key)}
-                    className={cn(
-                      "relative rounded-lg border px-3 py-2.5 text-left transition-colors",
-                      active
-                        ? "border-accent/50 bg-accent/[0.07]"
-                        : "border-edge bg-surface hover:border-[#333b46] hover:bg-white/[0.02]",
-                      !option.available && "cursor-not-allowed opacity-35 hover:border-edge",
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={cn(
-                          "text-[13px] font-medium",
-                          active ? "text-ink" : "text-muted",
-                        )}
-                      >
-                        {option.label}
-                      </span>
-                      {active ? <Check size={13} className="text-accent" /> : null}
-                    </div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-faint">
-                      {option.container ? (
-                        <span className="font-mono">{shortContainer(option.container)}</span>
-                      ) : null}
-                      {option.estimated_bytes ? (
-                        <span>~{formatBytes(option.estimated_bytes)}</span>
-                      ) : null}
-                      {option.requires_merge ? <span>merge</span> : null}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+            <PresetGrid presets={presets} selected={effectivePreset} onSelect={setPreset} />
           )}
           {selectedPreset?.selector_label && !custom ? (
             <p className="text-[11px] text-faint">{selectedPreset.selector_label}</p>
@@ -216,18 +149,11 @@ export function FormatPicker({ video }: { video: VideoInfo }) {
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Audio format" hint={`${formatDuration(video.duration_s)} source`}>
-            <Select
-              value={audioFormat}
-              onChange={(event) => setAudioFormatOverride(event.target.value)}
-            >
-              {AUDIO_FORMATS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <AudioFormatField
+            value={audioFormat}
+            onChange={overrides.setAudioFormat}
+            hint={`${formatDuration(video.duration_s)} source`}
+          />
           <div className="flex items-end">
             <p className="pb-2 text-[11px] text-faint">
               Audio is extracted from the best available stream and saved to your music
@@ -238,24 +164,12 @@ export function FormatPicker({ video }: { video: VideoInfo }) {
       )}
 
       {mode === "video" ? (
-        <div className="space-y-2 rounded-lg border border-edge-soft bg-surface/60 p-3.5">
-          <Toggle
-            checked={subtitles}
-            onChange={setSubsOverride}
-            label="Download subtitles"
-            description="Saves subtitles next to the video. Embedding is configurable in Settings."
-          />
-          {subtitles ? (
-            <Field label="Languages" hint="comma separated, e.g. en,de">
-              <Input
-                value={subtitleLangs}
-                onChange={(event) => setLangsOverride(event.target.value)}
-                placeholder="en"
-                className="h-9"
-              />
-            </Field>
-          ) : null}
-        </div>
+        <SubtitleOptions
+          enabled={subtitles}
+          onEnabledChange={overrides.setSubtitles}
+          langs={subtitleLangs}
+          onLangsChange={overrides.setSubtitleLangs}
+        />
       ) : null}
 
       <div className="flex flex-col gap-3 border-t border-edge-soft pt-4 sm:flex-row sm:items-center sm:justify-between">
