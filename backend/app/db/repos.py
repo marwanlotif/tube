@@ -10,6 +10,9 @@ from app.db.tables import CollectionRow, DownloadRow, SettingsRow, utcnow
 from app.domain.enums import ACTIVE_STATUSES, Event, Status
 from app.domain.state import apply
 
+# Each retry means another transition committed in between; a handful is plenty.
+_TRANSITION_ATTEMPTS = 8
+
 
 def _filter_downloads(
     stmt: Select,
@@ -74,15 +77,32 @@ class DownloadRepo:
             return list((await session.execute(stmt)).scalars().all())
 
     async def transition(self, download_id: str, event: Event, **fields: Any) -> DownloadRow:
-        """The only place status is written. Status and fields commit together."""
-        async with self.sessions.begin() as session:
-            row = await session.get(DownloadRow, download_id)
-            if row is None:
+        """The only place status is written. Status and fields commit together.
+
+        Compare-and-set: the update only applies if the status is still the one the
+        transition was checked against. If a concurrent transition got there first, the
+        event is re-checked against the new status, so e.g. a spawn can never overwrite a
+        cancel that landed in between (it raises InvalidTransition instead).
+        """
+        for _ in range(_TRANSITION_ATTEMPTS):
+            async with self.sessions() as session:
+                current = (
+                    await session.execute(
+                        select(DownloadRow.status).where(DownloadRow.id == download_id)
+                    )
+                ).scalar_one_or_none()
+            if current is None:
                 raise KeyError(download_id)
-            row.status = apply(Status(row.status), event).value
-            for key, value in fields.items():
-                setattr(row, key, value)
-        return row
+            target = apply(Status(current), event).value
+            async with self.sessions.begin() as session:
+                result = await session.execute(
+                    update(DownloadRow)
+                    .where(DownloadRow.id == download_id, DownloadRow.status == current)
+                    .values(status=target, **fields)
+                )
+                if result.rowcount == 1:
+                    return await session.get(DownloadRow, download_id)
+        raise RuntimeError(f"status of {download_id} kept changing during {event.value}")
 
     async def claim(self, download_id: str, event: Event, **fields: Any) -> DownloadRow | None:
         """Atomically move a queued job forward.

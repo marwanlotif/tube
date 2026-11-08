@@ -1,8 +1,11 @@
+import asyncio
+
 import pytest
 
 from app.db.engine import init_db, make_engine, make_sessionmaker
 from app.db.repos import CollectionRepo, DownloadRepo
-from app.domain.enums import Status
+from app.domain.enums import Event, Status
+from app.domain.state import InvalidTransition
 
 
 @pytest.fixture
@@ -150,3 +153,33 @@ async def test_delete_removes_items_and_empty_collections_only(repos):
     await collections.delete("col-2")
     assert await collections.get("col-2") is None
     assert await downloads.get("b") is None
+
+
+async def test_concurrent_transitions_never_lose_an_update(repos):
+    """A cancel racing the worker's spawn must win in every interleaving.
+
+    Serially, spawn-then-cancel and cancel-then-spawn (spawn rejected) both end canceled;
+    a non-atomic read-modify-write could let the spawn overwrite the cancel.
+    """
+    downloads, _ = repos
+    for attempt in range(25):
+        job_id = f"race-{attempt}"
+        await downloads.create(**_item(job_id, 1, Status.EXTRACTING))
+
+        async def spawn(job_id=job_id):
+            try:
+                await downloads.transition(job_id, Event.SPAWN)
+            except InvalidTransition:
+                pass
+
+        await asyncio.gather(spawn(), downloads.transition(job_id, Event.CANCEL))
+        assert (await downloads.get(job_id)).status == Status.CANCELED.value, attempt
+
+
+async def test_transition_still_rejects_invalid_moves(repos):
+    downloads, _ = repos
+    await downloads.create(**_item("done", 1, Status.COMPLETED))
+    with pytest.raises(InvalidTransition):
+        await downloads.transition("done", Event.CANCEL)
+    with pytest.raises(KeyError):
+        await downloads.transition("missing", Event.CANCEL)
