@@ -229,7 +229,11 @@ class DownloadManager:
                 if runtime.canceled:
                     await self._finish_canceled(download_id, runtime, current)
                     return
-                info: VideoInfo = await self.extractor.extract(spec["url"], force=True)
+                info: VideoInfo = await self.extractor.extract(
+                    spec["url"],
+                    force=True,
+                    cookies_from_browser=spec.get("cookies_from_browser"),
+                )
                 resolved = self.extractor.resolve(
                     info,
                     spec.get("preset_key"),

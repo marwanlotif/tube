@@ -22,7 +22,9 @@ async def create_download(payload: DownloadCreate, request: Request) -> dict:
     state.binaries.require_ytdlp()
     url = await asyncio.to_thread(validate_url, payload.url)
     settings = await load_settings(state.settings_repo, state.config)
-    info = await state.extractor.extract(url)
+    info = await state.extractor.extract(
+        url, cookies_from_browser=settings.cookies_from_browser
+    )
 
     mode = payload.mode
     preset = "audio" if mode == "audio" else (payload.preset or "best_1080")

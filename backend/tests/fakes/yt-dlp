@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -u
 
+if [ -n "${FAKE_ARGV_LOG:-}" ]; then
+  printf '%s\n' "$*" >> "$FAKE_ARGV_LOG"
+fi
+
 if [ "${1:-}" = "--version" ]; then
   echo "2026.10.26"
   exit 0
