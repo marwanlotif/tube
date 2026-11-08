@@ -2,7 +2,7 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from app.core.config import Config
-from app.db.tables import Base
+from app.db.migrations import migrate
 
 
 def make_engine(config: Config) -> AsyncEngine:
@@ -25,5 +25,4 @@ def make_sessionmaker(engine: AsyncEngine) -> async_sessionmaker:
 
 async def init_db(engine: AsyncEngine) -> None:
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.exec_driver_sql("PRAGMA user_version=1")
+        await conn.run_sync(migrate)
