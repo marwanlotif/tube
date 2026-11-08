@@ -32,14 +32,14 @@ async def _serve(app, host: str, port: int, open_browser: bool) -> None:
             return
         await asyncio.sleep(0.1)
     url = f"http://{host}:{port}"
-    print(f"\n  TubeTUI running at {url}\n  Press Ctrl+C to stop.\n")
+    print(f"\n  Tube running at {url}\n  Press Ctrl+C to stop.\n")
     if open_browser:
         webbrowser.open(url)
     await task
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="TubeTUI local downloader")
+    parser = argparse.ArgumentParser(description="Tube local downloader")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--no-browser", action="store_true")

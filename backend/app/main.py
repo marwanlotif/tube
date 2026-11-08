@@ -60,7 +60,7 @@ def create_app(config: Config | None = None) -> FastAPI:
             await manager.stop()
             await engine.dispose()
 
-    app = FastAPI(title="TubeTUI", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="Tube", version="1.0.0", lifespan=lifespan)
     app.state.token = token
     app.state.config = config
 
@@ -123,7 +123,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         index = dist / "index.html"
         if not index.is_file():
             return HTMLResponse(
-                "<h1>TubeTUI</h1><p>Frontend is not built yet. Run <code>make build</code>.</p>",
+                "<h1>Tube</h1><p>Frontend is not built yet. Run <code>make build</code>.</p>",
                 status_code=200,
             )
         html = index.read_text().replace("__VID_DWN_TOKEN__", token)

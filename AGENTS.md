@@ -1,6 +1,6 @@
 # AGENTS.md
 
-TubeTUI (`vid-dwn`) is a local-only video/audio downloader: FastAPI backend drives
+Tube (`vid-dwn`) is a local-only video/audio downloader: FastAPI backend drives
 yt-dlp/FFmpeg, React frontend is served from the same process. No accounts, no cloud.
 
 ## Commands

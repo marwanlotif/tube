@@ -311,7 +311,7 @@ export function SettingsPage() {
             </Select>
           </Field>
           <p className="text-[11px] leading-relaxed text-faint">
-            The worker count is applied the next time TubeTUI starts. Raising it above 1 can
+            The worker count is applied the next time Tube starts. Raising it above 1 can
             get you rate-limited by some sites.
           </p>
         </Section>

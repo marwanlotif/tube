@@ -1,4 +1,4 @@
-# TubeTUI
+# Tube
 
 A local video and audio downloader with a small web UI. FastAPI runs the queue and a
 React frontend drives it. Files are written straight to disk on this machine — there is no
@@ -61,7 +61,7 @@ editable in Settings.
 
 ## Security
 
-TubeTUI binds to localhost. Every mutating API call needs a per-process capability token
+Tube binds to localhost. Every mutating API call needs a per-process capability token
 injected into the served page, and the WebSocket authenticates with a first message (not
 a query string). Host and origin checks reject unexpected callers. The app is not meant
 to be exposed through a reverse proxy or to other machines.

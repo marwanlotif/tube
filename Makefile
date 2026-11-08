@@ -19,7 +19,7 @@ $(DIST): $(FRONTEND_SRC)
 			echo "Warning: frontend sources changed, but npm is not installed. Using the existing build." >&2; \
 			exit 0; \
 		fi; \
-		echo "TubeTUI's frontend is not built and npm is not installed." >&2; \
+		echo "Tube's frontend is not built and npm is not installed." >&2; \
 		echo "Run 'make install && make build' on a machine with Node.js, then copy the repo." >&2; \
 		exit 1; \
 	fi; \

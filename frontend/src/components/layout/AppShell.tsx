@@ -70,7 +70,7 @@ function HealthWarning() {
       <p>
         {missing.join(" and ")} {missing.length > 1 ? "are" : "is"} not available. Downloads
         that need {missing.length > 1 ? "them" : "it"} will fail. Install it and restart
-        TubeTUI.
+        Tube.
       </p>
     </div>
   );
@@ -88,7 +88,7 @@ export function AppShell() {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-accent-ink">
               <Clapperboard size={17} strokeWidth={2.4} />
             </span>
-            <span className="text-[15px] font-semibold tracking-tight text-ink">TubeTUI</span>
+            <span className="text-[15px] font-semibold tracking-tight text-ink">Tube</span>
           </NavLink>
           <span
             className="flex items-center gap-1.5 text-[11px] text-faint lg:hidden"
