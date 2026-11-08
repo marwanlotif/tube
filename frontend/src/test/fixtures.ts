@@ -1,5 +1,7 @@
 import type {
   Collection,
+  CollectionEntry,
+  CollectionInfo,
   DownloadList,
   DownloadOut,
   Preset,
@@ -137,6 +139,49 @@ export function makeSettings(overrides: Partial<Settings> = {}): Settings {
     network: { fragments: 4, rate_limit: null, retries: 10, socket_timeout: 30 },
     cookies_from_browser: null,
     max_concurrent_downloads: 1,
+    ...overrides,
+  };
+}
+
+export function makeEntry(overrides: Partial<CollectionEntry> = {}): CollectionEntry {
+  const id = overrides.id ?? "vid001";
+  return {
+    id,
+    index: 1,
+    title: `Video ${id}`,
+    url: `https://www.youtube.com/watch?v=${id}`,
+    duration_s: 60,
+    kind: "video",
+    available: true,
+    reason: null,
+    ...overrides,
+  };
+}
+
+export function makeCollectionInfo(overrides: Partial<CollectionInfo> = {}): CollectionInfo {
+  const presets = makeVideoInfo().presets.map((p) => ({ ...p, available: true }));
+  return {
+    kind: "collection",
+    id: "PLtest123",
+    collection_type: "playlist",
+    title: "Test Playlist",
+    uploader: "Tester",
+    site: "YoutubeTab",
+    webpage_url: "https://www.youtube.com/playlist?list=PLtest123",
+    thumbnail_url: null,
+    total: 4,
+    truncated: false,
+    max_entries: 500,
+    entries: [
+      makeEntry({ id: "vid001", index: 1, title: "First Video", duration_s: 61 }),
+      makeEntry({ id: "vid002", index: 2, title: "Second Video", duration_s: 125 }),
+      makeEntry({
+        id: "vidpriv", index: 3, title: "[Private video]", duration_s: null,
+        available: false, reason: "No longer available",
+      }),
+      makeEntry({ id: "vid003", index: 4, title: "Third Video", duration_s: null }),
+    ],
+    presets,
     ...overrides,
   };
 }

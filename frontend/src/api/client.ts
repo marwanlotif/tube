@@ -12,7 +12,6 @@ import type {
   Settings,
   Stats,
   SystemInfo,
-  VideoInfo,
 } from "./models";
 
 export class ApiError extends Error {
@@ -98,12 +97,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  videoInfo: (url: string) =>
-    request<VideoInfo>("/api/videos/info", {
-      method: "POST",
-      body: JSON.stringify({ url }),
-    }),
-
   /** Describe a link; `playlist` asks for the playlist when it names a video too. */
   probe: (url: string, playlist = false) =>
     request<ProbeResult>("/api/videos/info", {

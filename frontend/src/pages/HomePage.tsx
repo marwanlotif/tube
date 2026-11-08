@@ -1,7 +1,10 @@
-import { HardDrive, Lock, Zap } from "lucide-react";
+import { HardDrive, ListVideo, Lock, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import type { VideoInfo } from "@/api/models";
+import { useProbe } from "@/api/queries";
+import { CollectionPicker } from "@/components/collection/CollectionPicker";
+import { CollectionPreview } from "@/components/collection/CollectionPreview";
+import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { FormatPicker } from "@/components/video/FormatPicker";
 import { UrlForm } from "@/components/video/UrlForm";
@@ -9,17 +12,25 @@ import { VideoPreview } from "@/components/video/VideoPreview";
 
 const HINTS = [
   { icon: HardDrive, text: "Saved locally to ~/Videos/VidDwn" },
-  { icon: Zap, text: "Video, audio and subtitles" },
+  { icon: Zap, text: "Videos, playlists and channels" },
   { icon: Lock, text: "Localhost only, no account" },
 ];
 
 export function HomePage() {
-  const [video, setVideo] = useState<VideoInfo | null>(null);
+  const [url, setUrl] = useState("");
+  const probe = useProbe();
+  const result = probe.data;
+  const sourceUrl = probe.variables?.url ?? "";
   const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (video) resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [video]);
+    if (result) resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [result]);
+
+  const load = (target: string, playlist = false) => {
+    setUrl(target);
+    probe.mutate({ url: target, playlist });
+  };
 
   return (
     <div className="mx-auto w-full max-w-4xl">
@@ -37,7 +48,20 @@ export function HomePage() {
             machine.
           </p>
           <div className="mt-5">
-            <UrlForm onLoaded={setVideo} busy={false} />
+            <UrlForm
+              url={url}
+              onUrlChange={(value) => {
+                setUrl(value);
+                if (probe.isError) probe.reset();
+              }}
+              onSubmit={(value) => load(value)}
+              onClear={() => {
+                setUrl("");
+                probe.reset();
+              }}
+              loading={probe.isPending}
+              error={probe.error}
+            />
           </div>
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
             {HINTS.map(({ icon: Icon, text }) => (
@@ -50,12 +74,34 @@ export function HomePage() {
       </header>
 
       <div ref={resultRef} className="scroll-mt-6">
-        {video ? (
+        {result?.kind === "video" ? (
           <Card className="mt-4 animate-in">
             <CardBody className="space-y-5">
-              <VideoPreview video={video} />
+              <VideoPreview video={result} />
+              {result.playlist_hint ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-edge-soft bg-surface/60 px-3.5 py-2.5">
+                  <p className="flex items-center gap-2 text-[13px] text-muted">
+                    <ListVideo size={14} className="text-faint" />
+                    This video is part of a playlist.
+                  </p>
+                  <Button size="sm" variant="outline" onClick={() => load(sourceUrl, true)}>
+                    Load the playlist
+                  </Button>
+                </div>
+              ) : null}
               <div className="border-t border-edge-soft" />
-              <FormatPicker key={video.id} video={video} />
+              <FormatPicker key={result.id} video={result} />
+            </CardBody>
+          </Card>
+        ) : result?.kind === "collection" ? (
+          <Card className="mt-4 animate-in">
+            <CardBody className="space-y-5">
+              <CollectionPreview collection={result} onOpen={(target) => load(target)} />
+              <CollectionPicker
+                key={`${result.id}:${sourceUrl}`}
+                collection={result}
+                sourceUrl={sourceUrl}
+              />
             </CardBody>
           </Card>
         ) : (
