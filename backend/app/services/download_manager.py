@@ -26,6 +26,9 @@ from app.services.storage import (
 
 log = logging.getLogger(__name__)
 
+# How long stop() lets busy workers wind down before cancelling them outright.
+SHUTDOWN_TIMEOUT = 10.0
+
 
 @dataclass
 class JobRuntime:
@@ -57,7 +60,8 @@ class DownloadManager:
         self.extractor = extractor
         self.runner = runner
         self.events = events
-        self.queue: asyncio.Queue[str] = asyncio.Queue()
+        # ``None`` is the stop sentinel that wakes an idle worker during shutdown.
+        self.queue: asyncio.Queue[str | None] = asyncio.Queue()
         self.runtimes: dict[str, JobRuntime] = {}
         self.workers: list[asyncio.Task] = []
         self._stopping = False
@@ -74,13 +78,21 @@ class DownloadManager:
 
     async def stop(self) -> None:
         self._stopping = True
-        for runtime in list(self.runtimes.values()):
-            if runtime.handle:
-                runtime.canceled = True
-                await kill_process_group(runtime.handle.pid, grace=2.0)
-        for worker in self.workers:
-            worker.cancel()
-        await asyncio.gather(*self.workers, return_exceptions=True)
+        running = [rt for rt in self.runtimes.values() if rt.handle]
+        for runtime in running:
+            runtime.canceled = True
+        await asyncio.gather(*(kill_process_group(rt.handle.pid, grace=2.0) for rt in running))
+        # Let workers finish their current job (its process is gone) instead of cancelling
+        # them mid-way: a task cancelled during a database write can leave its connection
+        # holding the write lock, so the next writer fails with "database is locked".
+        if self.workers:
+            for _ in self.workers:
+                self.queue.put_nowait(None)
+            _, stragglers = await asyncio.wait(self.workers, timeout=SHUTDOWN_TIMEOUT)
+            for worker in stragglers:
+                log.warning("cancelling %s after %ss", worker.get_name(), SHUTDOWN_TIMEOUT)
+                worker.cancel()
+            await asyncio.gather(*self.workers, return_exceptions=True)
         for row in await self.repo.active():
             if row.status == Status.QUEUED.value:
                 continue
@@ -193,6 +205,9 @@ class DownloadManager:
     async def _worker(self) -> None:
         while not self._stopping:
             download_id = await self.queue.get()
+            if download_id is None or self._stopping:
+                self.queue.task_done()
+                break  # shutting down: leave queued jobs queued for the next start
             try:
                 await self._run(download_id)
             except asyncio.CancelledError:

@@ -8,7 +8,7 @@ import pytest
 
 from app.db.engine import init_db, make_engine, make_sessionmaker
 from app.db.repos import DownloadRepo, SettingsRepo
-from app.domain.enums import Event, Status
+from app.domain.enums import ACTIVE_STATUSES, Event, Status
 from app.services.download_manager import DownloadManager
 from app.services.events import EventBus
 from app.services.extractor import Extractor
@@ -210,3 +210,34 @@ async def test_missing_selector_without_revalidation_is_invalid(harness, media_r
     assert row.status == Status.FAILED.value
     assert row.error_code == "SPEC_INVALID"
     assert runner.starts == []
+
+
+async def test_stop_lets_the_running_job_wind_down_and_leaves_the_queue(
+    harness, media_roots, fake_env
+):
+    fake_env.setenv("FAKE_DELAY", "5")
+    repo, manager, runner = harness
+    manager.config = manager.config.model_copy(update={"max_concurrent_downloads": 1})
+    running = await _queued_job(repo, media_roots / "Videos" / "Tube")
+    waiting = await _queued_job(repo, media_roots / "Videos" / "Tube")
+    await manager.start()
+    await manager.enqueue(running)
+    await manager.enqueue(waiting)
+    for _ in range(200):
+        if (rt := manager.runtimes.get(running)) and rt.handle:
+            break
+        await asyncio.sleep(0.02)
+    workers = list(manager.workers)
+
+    await manager.stop()
+
+    assert all(w.done() and not w.cancelled() for w in workers)  # exited on their own
+    assert runner.starts == [running]  # the queued job was not started during shutdown
+    assert (await repo.get(running)).status not in {s.value for s in ACTIVE_STATUSES}
+    assert (await repo.get(waiting)).status == Status.QUEUED.value
+
+
+async def test_stop_without_start_is_a_no_op(harness):
+    _, manager, _ = harness
+    await manager.stop()
+    assert manager.workers == []
