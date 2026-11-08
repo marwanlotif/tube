@@ -6,13 +6,13 @@ from pathlib import Path
 
 from app.core.config import Config
 from app.core.errors import AppError, redact
-from app.db.repos import DownloadRepo, SettingsRepo
+from app.db.repos import CollectionRepo, DownloadRepo, SettingsRepo
 from app.db.tables import utcnow
-from app.domain.enums import ACTIVE_STATUSES, Event, Status
+from app.domain.enums import ACTIVE_STATUSES, RETRYABLE_STATUSES, Event, Status
 from app.domain.naming import validate_template
 from app.domain.progress import ProgressUpdate, parse_line
 from app.domain.state import InvalidTransition
-from app.schemas.serialize import download_out
+from app.schemas.serialize import collection_out, download_out
 from app.services.events import EventBus
 from app.services.extractor import Extractor, VideoInfo
 from app.services.runner import RunHandle, Runner
@@ -48,8 +48,10 @@ class DownloadManager:
         extractor: Extractor,
         runner: Runner,
         events: EventBus,
+        collections: CollectionRepo | None = None,
     ):
         self.config = config
+        self.collections = collections
         self.repo = repo
         self.settings_repo = settings_repo
         self.extractor = extractor
@@ -99,7 +101,7 @@ class DownloadManager:
     async def enqueue(self, download_id: str) -> None:
         await self.queue.put(download_id)
 
-    async def cancel(self, download_id: str) -> None:
+    async def cancel(self, download_id: str, notify_collection: bool = True) -> None:
         row = await self.repo.get(download_id)
         if row is None:
             raise AppError("NOT_FOUND", "Download not found", 404)
@@ -107,7 +109,7 @@ class DownloadManager:
             return  # idempotent
         runtime = self.runtimes.get(download_id)
         if runtime is None:
-            await self._cancel_without_process(download_id)
+            await self._cancel_without_process(download_id, notify_collection)
             return
         runtime.canceled = True
         if runtime.handle:
@@ -115,11 +117,40 @@ class DownloadManager:
             try:
                 await asyncio.wait_for(runtime.done.wait(), timeout=8)
             except TimeoutError:
-                await self._cancel_without_process(download_id)
+                await self._cancel_without_process(download_id, notify_collection)
         else:
-            await self._cancel_without_process(download_id)
+            await self._cancel_without_process(download_id, notify_collection)
 
-    async def _cancel_without_process(self, download_id: str) -> None:
+    async def cancel_collection(self, collection_id: str) -> None:
+        """Cancel every unfinished item of a collection.
+
+        Queued items go first, in one quick pass, so no worker can start them while a
+        running item is being stopped (that takes seconds). Then every item still in
+        flight is stopped concurrently.
+        """
+        queued = await self.repo.ids_in_collection(collection_id, {Status.QUEUED})
+        for download_id in queued:
+            await self.cancel(download_id, notify_collection=False)
+        in_flight = await self.repo.ids_in_collection(collection_id, ACTIVE_STATUSES)
+        await asyncio.gather(*(self.cancel(i, notify_collection=False) for i in in_flight))
+        await self._collection_changed(collection_id)
+
+    async def retry_collection(self, collection_id: str) -> int:
+        """Re-queue every failed, canceled or interrupted item; returns how many."""
+        ids = await self.repo.ids_in_collection(collection_id, RETRYABLE_STATUSES)
+        retried = 0
+        for download_id in ids:
+            try:
+                await self.retry(download_id, notify_collection=False)
+                retried += 1
+            except AppError:
+                pass  # its state changed since it was listed
+        await self._collection_changed(collection_id)
+        return retried
+
+    async def _cancel_without_process(
+        self, download_id: str, notify_collection: bool = True
+    ) -> None:
         try:
             await self.repo.transition(
                 download_id, Event.CANCEL, finished_at=utcnow(), speed=None, eta_s=None,
@@ -127,13 +158,13 @@ class DownloadManager:
             )
         except (InvalidTransition, KeyError):
             pass
-        await self._emit(download_id)
+        await self._emit(download_id, notify_collection)
 
-    async def retry(self, download_id: str) -> None:
+    async def retry(self, download_id: str, notify_collection: bool = True) -> None:
         row = await self.repo.get(download_id)
         if row is None:
             raise AppError("NOT_FOUND", "Download not found", 404)
-        if Status(row.status) not in {Status.FAILED, Status.CANCELED, Status.INTERRUPTED}:
+        if Status(row.status) not in RETRYABLE_STATUSES:
             raise AppError("INVALID_STATE", "Only failed, canceled or interrupted jobs can retry", 409)
         spec = dict(row.job_spec or {})
         spec["revalidate"] = True
@@ -156,7 +187,7 @@ class DownloadManager:
             started_at=None,
             finished_at=None,
         )
-        await self._emit(download_id)
+        await self._emit(download_id, notify_collection)
         await self.enqueue(download_id)
 
     async def _worker(self) -> None:
@@ -222,6 +253,8 @@ class DownloadManager:
                 )
             if claimed is None:
                 return  # canceled or claimed elsewhere since it was queued
+            if claimed.collection_id:
+                await self._collection_changed(claimed.collection_id)
             current = Status(claimed.status)
             self._validate_spec(spec)
 
@@ -274,11 +307,13 @@ class DownloadManager:
                     ),
                     started_at=utcnow(),
                     # Playlist items are queued from a flat listing; fill in the details.
+                    # Identity (id, site) is only filled when missing: it was fixed when the
+                    # job was queued and is what duplicate detection matches on.
                     title=info.title,
                     uploader=info.uploader,
                     duration_s=info.duration_s,
-                    video_id=info.id or row.video_id,
-                    site=info.site or row.site,
+                    video_id=row.video_id or info.id,
+                    site=row.site or info.site,
                     thumbnail_name=info.thumbnail_name or row.thumbnail_name,
                 )
                 await self._broadcast(row)
@@ -425,7 +460,7 @@ class DownloadManager:
             error_code=None,
             error_message=None,
         )
-        await self._broadcast(row)
+        await self._status_changed(row)
         await self.events.broadcast({"type": "stats.updated"})
 
     async def _finish_canceled(
@@ -444,7 +479,7 @@ class DownloadManager:
             )
         except (InvalidTransition, KeyError):
             return
-        await self._broadcast(row)
+        await self._status_changed(row)
         await self.events.broadcast({"type": "stats.updated"})
 
     async def _fail(
@@ -471,7 +506,7 @@ class DownloadManager:
             )
         except (InvalidTransition, KeyError):
             return
-        await self._broadcast(row)
+        await self._status_changed(row)
         await self.events.broadcast({"type": "stats.updated"})
 
     @staticmethod
@@ -502,7 +537,21 @@ class DownloadManager:
     async def _broadcast(self, row) -> None:
         await self.events.broadcast({"type": "download.updated", "download": download_out(row)})
 
-    async def _emit(self, download_id: str) -> None:
+    async def _status_changed(self, row, notify_collection: bool = True) -> None:
+        await self._broadcast(row)
+        if notify_collection and row.collection_id:
+            await self._collection_changed(row.collection_id)
+
+    async def _collection_changed(self, collection_id: str) -> None:
+        if self.collections is None:
+            return
+        summary = await self.collections.summary(collection_id)
+        if summary:
+            await self.events.broadcast(
+                {"type": "collection.updated", "collection": collection_out(summary)}
+            )
+
+    async def _emit(self, download_id: str, notify_collection: bool = True) -> None:
         row = await self.repo.get(download_id)
         if row:
-            await self._broadcast(row)
+            await self._status_changed(row, notify_collection)

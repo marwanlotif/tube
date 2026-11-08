@@ -1,10 +1,13 @@
 from datetime import UTC
 
+from app.db.repos import CollectionSummary
 from app.db.tables import DownloadRow
+from app.domain.enums import ACTIVE_STATUSES, RETRYABLE_STATUSES, Status
 from app.domain.formats import FormatOption, preset_choices
 from app.schemas.video import (
     CollectionEntryOut,
     CollectionInfoOut,
+    CollectionOut,
     DownloadOut,
     FormatOut,
     PresetOut,
@@ -53,6 +56,37 @@ def download_out(row: DownloadRow) -> dict:
         created_at=_aware(row.created_at),
         started_at=_aware(row.started_at),
         finished_at=_aware(row.finished_at),
+        collection_id=row.collection_id,
+        playlist_index=row.playlist_index,
+    ).model_dump(mode="json")
+
+
+def collection_out(summary: CollectionSummary) -> dict:
+    row = summary.row
+    total = summary.item_total
+    completed = summary.count(Status.COMPLETED)
+    # Completed items count in full, items in progress by their own progress; failed or
+    # canceled items count as not done.
+    progress = (100.0 * completed + summary.active_progress) / total if total else 0.0
+    return CollectionOut(
+        id=row.id,
+        url=row.url,
+        collection_type=row.collection_type,
+        title=row.title,
+        uploader=row.uploader,
+        site=row.site,
+        thumbnail_url=_thumbnail_url(row.thumbnail_name),
+        mode=row.mode,
+        preset_key=row.preset_key,
+        output_dir=row.output_dir,
+        entry_total=row.entry_total,
+        item_total=total,
+        counts=summary.counts,
+        active_total=summary.count(*ACTIVE_STATUSES),
+        completed_total=completed,
+        failed_total=summary.count(*RETRYABLE_STATUSES),
+        progress=round(min(100.0, progress), 2),
+        created_at=_aware(row.created_at),
     ).model_dump(mode="json")
 
 

@@ -42,6 +42,7 @@ def test_entry_fields_are_normalised(playlist):
     assert second.duration_s == 125
     assert second.url == "https://www.youtube.com/watch?v=vid002"
     assert second.available and second.reason is None
+    assert second.extractor == "Youtube"
     assert listing.entry("vid003").duration_s is None
 
 

@@ -3,6 +3,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+AudioFormat = Literal["mp3", "m4a", "flac", "wav", "opus"]
+
 
 class FormatOut(BaseModel):
     format_id: str
@@ -98,7 +100,7 @@ class DownloadCreate(BaseModel):
     video_id: str | None = None
     audio_id: str | None = None
     mode: Literal["video", "audio"] = "video"
-    audio_format: Literal["mp3", "m4a", "flac", "wav", "opus"] | None = None
+    audio_format: AudioFormat | None = None
     subtitles: bool | None = None
     subtitle_langs: str | None = None
 
@@ -134,11 +136,70 @@ class DownloadOut(BaseModel):
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    collection_id: str | None = None
+    playlist_index: int | None = None
 
 
 class DownloadList(BaseModel):
     items: list[DownloadOut]
     total: int
+
+
+class CollectionCreate(BaseModel):
+    url: str
+    # Ids from the listing returned by /api/videos/info; the server maps them back to
+    # entries itself and never downloads a URL supplied by the client.
+    entry_ids: list[str] = Field(min_length=1, max_length=5000)
+    mode: Literal["video", "audio"] = "video"
+    preset: str | None = None
+    audio_format: AudioFormat | None = None
+    subtitles: bool | None = None
+    subtitle_langs: str | None = None
+    subfolder: bool = True
+    skip_existing: bool = True
+
+
+class CollectionOut(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    url: str
+    collection_type: Literal["playlist", "channel"]
+    title: str | None = None
+    uploader: str | None = None
+    site: str | None = None
+    thumbnail_url: str | None = None
+    mode: Literal["video", "audio"]
+    preset_key: str | None = None
+    output_dir: str | None = None
+    entry_total: int
+    item_total: int
+    counts: dict[str, int] = Field(default_factory=dict)
+    active_total: int = 0
+    completed_total: int = 0
+    failed_total: int = 0  # failed, canceled or interrupted: everything retry can pick up
+    progress: float = 0.0
+    created_at: datetime
+
+
+class CollectionList(BaseModel):
+    items: list[CollectionOut]
+    total: int
+
+
+class CollectionSkipped(BaseModel):
+    not_found: int = 0
+    unavailable: int = 0
+    blocked: int = 0
+    already_downloaded: int = 0
+
+
+class CollectionCreated(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    collection: CollectionOut
+    created: int
+    skipped: CollectionSkipped
 
 
 class StatsOut(BaseModel):

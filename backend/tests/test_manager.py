@@ -144,7 +144,15 @@ async def test_deferred_item_resolves_formats_and_fills_in_details(harness, medi
     assert row.title == "Test Video"
     assert row.uploader == "Tester"
     assert row.duration_s == 120
-    assert row.site == "Test"
+    assert (row.video_id, row.site) == ("abc123", "Youtube")  # identity from the listing
+
+
+async def test_revalidation_fills_identity_only_when_missing(harness, media_roots):
+    repo, manager, _ = harness
+    job_id = await _queued_job(repo, media_roots / "Videos" / "Tube", **_deferred())
+    await manager._run(job_id)
+    row = await repo.get(job_id)
+    assert (row.video_id, row.site) == ("abc123", "Test")
     assert row.job_spec["revalidate"] is False
 
 

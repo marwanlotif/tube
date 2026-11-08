@@ -31,6 +31,9 @@ class CollectionEntry:
     kind: str  # "video" or "collection" (a nested playlist, e.g. a channel tab)
     available: bool
     reason: str | None = None
+    # yt-dlp extractor for the entry (e.g. "Youtube"); the same name a standalone
+    # download of that video records as its site.
+    extractor: str | None = None
 
 
 @dataclass(frozen=True)
@@ -151,6 +154,7 @@ def parse_collection(payload: dict, limit: int) -> CollectionListing:
                 kind=kind,
                 available=reason is None,
                 reason=reason,
+                extractor=raw.get("ie_key") if isinstance(raw.get("ie_key"), str) else None,
             )
         )
 
