@@ -4,6 +4,7 @@ from sqlalchemy import (
     JSON,
     DateTime,
     Float,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -18,6 +19,30 @@ def utcnow() -> datetime:
 
 class Base(DeclarativeBase):
     pass
+
+
+class CollectionRow(Base):
+    """A playlist or channel queued as a group; each video is its own DownloadRow."""
+
+    __tablename__ = "collections"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    source_id: Mapped[str | None] = mapped_column(Text)
+    collection_type: Mapped[str] = mapped_column(String(16), default="playlist")
+    title: Mapped[str | None] = mapped_column(Text)
+    uploader: Mapped[str | None] = mapped_column(Text)
+    site: Mapped[str | None] = mapped_column(String(64))
+    thumbnail_name: Mapped[str | None] = mapped_column(String(80))
+
+    mode: Mapped[str] = mapped_column(String(16), default="video")
+    preset_key: Mapped[str | None] = mapped_column(String(32))
+    output_dir: Mapped[str | None] = mapped_column(Text)
+    entry_total: Mapped[int] = mapped_column(Integer, default=0)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (Index("ix_collections_created", created_at.desc()),)
 
 
 class DownloadRow(Base):
@@ -59,6 +84,11 @@ class DownloadRow(Base):
     pid_started_ticks: Mapped[int | None] = mapped_column(Integer)
     resumable: Mapped[bool] = mapped_column(default=False)
 
+    collection_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("collections.id", ondelete="SET NULL")
+    )
+    playlist_index: Mapped[int | None] = mapped_column(Integer)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -66,6 +96,7 @@ class DownloadRow(Base):
     __table_args__ = (
         Index("ix_downloads_status", "status"),
         Index("ix_downloads_created", created_at.desc()),
+        Index("ix_downloads_collection", "collection_id", "playlist_index"),
     )
 
 

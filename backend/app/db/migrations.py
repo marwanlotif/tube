@@ -19,7 +19,45 @@ Migration = Callable[[Connection], None]
 # Databases created before migrations existed were stamped with version 1.
 BASELINE_VERSION = 1
 
-MIGRATIONS: dict[int, Migration] = {}
+
+def _v2_collections(conn: Connection) -> None:
+    """Group playlist/channel items under a collection.
+
+    The DDL is frozen here rather than derived from the models, so later model changes
+    cannot alter what this step does. It must match a fresh ``create_all`` exactly.
+    """
+    for statement in (
+        """
+        CREATE TABLE collections (
+            id VARCHAR(36) NOT NULL,
+            url TEXT NOT NULL,
+            source_id TEXT,
+            collection_type VARCHAR(16) NOT NULL,
+            title TEXT,
+            uploader TEXT,
+            site VARCHAR(64),
+            thumbnail_name VARCHAR(80),
+            mode VARCHAR(16) NOT NULL,
+            preset_key VARCHAR(32),
+            output_dir TEXT,
+            entry_total INTEGER NOT NULL,
+            created_at DATETIME NOT NULL,
+            PRIMARY KEY (id)
+        )
+        """,
+        "CREATE INDEX ix_collections_created ON collections (created_at DESC)",
+        # SQLite allows a REFERENCES clause on ADD COLUMN when the default is NULL.
+        (
+            "ALTER TABLE downloads ADD COLUMN collection_id VARCHAR(36) "
+            "REFERENCES collections (id) ON DELETE SET NULL"
+        ),
+        "ALTER TABLE downloads ADD COLUMN playlist_index INTEGER",
+        "CREATE INDEX ix_downloads_collection ON downloads (collection_id, playlist_index)",
+    ):
+        conn.exec_driver_sql(statement)
+
+
+MIGRATIONS: dict[int, Migration] = {2: _v2_collections}
 SCHEMA_VERSION = max(MIGRATIONS, default=BASELINE_VERSION)
 
 

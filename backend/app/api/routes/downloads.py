@@ -10,7 +10,8 @@ from app.domain.enums import Status
 from app.domain.urls import validate_url
 from app.schemas.serialize import download_out
 from app.schemas.video import DownloadCreate, DownloadList, DownloadOut
-from app.services.settings import LANGS_RE, load_settings
+from app.services.job_spec import job_options, needs_ffmpeg
+from app.services.settings import load_settings
 from app.services.storage import reveal_file, safe_delete_file
 
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
@@ -42,34 +43,26 @@ async def create_download(payload: DownloadCreate, request: Request) -> dict:
             {"preset": preset},
         )
 
-    audio_format = payload.audio_format or settings.audio.format
-    subtitles = settings.subtitles.model_dump()
-    if payload.subtitles is not None:
-        subtitles["enabled"] = payload.subtitles
-    if payload.subtitle_langs:
-        subtitles["langs"] = payload.subtitle_langs.strip()
-    if subtitles["enabled"] and not LANGS_RE.match(subtitles["langs"]):
-        raise AppError("INVALID_SETTINGS", "Invalid subtitle language list", 422)
-    if mode == "audio" or resolved.requires_merge or subtitles.get("embed"):
+    options = job_options(
+        settings,
+        mode=mode,
+        audio_format=payload.audio_format,
+        subtitles=payload.subtitles,
+        subtitle_langs=payload.subtitle_langs,
+    )
+    if needs_ffmpeg(options, resolved.requires_merge):
         state.binaries.require_ffmpeg()
 
-    output_dir = settings.audio_dir if mode == "audio" else settings.video_dir
+    output_dir = options["output_dir"]
     spec = {
+        **options,
         "url": url,
-        "mode": mode,
         "selector": resolved.selector,
         "container": resolved.container,
         "requires_merge": resolved.requires_merge,
-        "output_dir": output_dir,
-        "filename_template": settings.filename_template,
         "preset_key": None if payload.video_id else preset,
         "video_id": payload.video_id,
         "audio_id": payload.audio_id,
-        "audio_format": audio_format,
-        "audio_quality": settings.audio.quality,
-        "subtitles": subtitles,
-        "network": settings.network.model_dump(),
-        "cookies_from_browser": settings.cookies_from_browser,
         "resolved": {"video_id": resolved.video_id, "audio_id": resolved.audio_id},
         "extracted_at": datetime.now(UTC).isoformat(),
         "revalidate": False,
@@ -88,7 +81,7 @@ async def create_download(payload: DownloadCreate, request: Request) -> dict:
         status=Status.QUEUED.value,
         format_label=resolved.label,
         format_selector=resolved.selector,
-        container=audio_format if mode == "audio" else resolved.container,
+        container=options["audio_format"] if mode == "audio" else resolved.container,
         output_dir=output_dir,
         job_spec=spec,
         resumable=False,
