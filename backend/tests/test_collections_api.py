@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 import app.domain.urls as urls_module
@@ -7,6 +8,7 @@ from app.main import create_app
 PLAYLIST_URL = "https://www.youtube.com/playlist?list=PLtest123"
 CHANNEL_URL = "https://www.youtube.com/@tester"
 MIXED_URL = "https://www.youtube.com/watch?v=abc123&list=PLtest123"
+SHORT_MIXED_URL = "https://youtu.be/abc123?list=PLtest123"
 VIDEO_URL = "https://example.com/watch?v=abc123"
 
 
@@ -44,8 +46,9 @@ def test_playlist_link_returns_a_collection_listing(client):
         "reason": None,
     }
     assert entries["vidpriv"]["available"] is False
-    assert {p["key"] for p in body["presets"]} >= {"best_1080", "audio"}
-    assert all(p["available"] for p in body["presets"])
+    availability = {p["key"]: p["available"] for p in body["presets"]}
+    assert {"best_1080", "audio"} <= set(availability)
+    assert [key for key, ok in availability.items() if not ok] == ["webm_1080"]
 
 
 def test_channel_link_lists_its_tabs_as_nested_collections(client):
@@ -66,12 +69,13 @@ def test_single_video_keeps_its_response_shape(client):
     assert body["formats"] and body["presets"]
 
 
-def test_link_to_video_inside_playlist_prefers_the_video_but_hints(client):
-    video = info(client, MIXED_URL).json()
+@pytest.mark.parametrize("url", [MIXED_URL, SHORT_MIXED_URL])
+def test_link_to_video_inside_playlist_prefers_the_video_but_hints(client, url):
+    video = info(client, url).json()
     assert video["kind"] == "video"
     assert video["playlist_hint"] is True
 
-    listing = info(client, MIXED_URL, playlist=True).json()
+    listing = info(client, url, playlist=True).json()
     assert listing["kind"] == "collection"
     assert listing["title"] == "Test Playlist"
 
@@ -131,6 +135,10 @@ def test_empty_listing_is_reported(client, fake_env, tmp_path):
 
 def test_playlist_hint_only_for_links_naming_both():
     assert looks_like_playlist_member(MIXED_URL)
+    assert looks_like_playlist_member(SHORT_MIXED_URL)
+    assert not looks_like_playlist_member("https://youtu.be/abc123")
+    assert not looks_like_playlist_member("https://youtu.be/?list=PLtest123")
+    assert not looks_like_playlist_member("https://example.com/abc123?list=PLtest123")
     assert not looks_like_playlist_member(PLAYLIST_URL)
     assert not looks_like_playlist_member(VIDEO_URL)
     assert not looks_like_playlist_member("https://x.test/watch?v=a&list=")

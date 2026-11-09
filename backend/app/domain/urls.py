@@ -39,9 +39,18 @@ def assert_public_host(hostname: str, resolver=socket.getaddrinfo) -> None:
 
 
 def looks_like_playlist_member(url: str) -> bool:
-    """A link to one video that also names a playlist, e.g. YouTube's ``watch?v=…&list=…``."""
-    query = parse_qs(urlsplit(url).query)
-    return bool(query.get("list")) and bool(query.get("v"))
+    """A link to one video that also names a playlist.
+
+    YouTube puts the video in the query (``watch?v=…&list=…``) or, for ``youtu.be`` short
+    links, in the path (``youtu.be/<id>?list=…``).
+    """
+    parts = urlsplit(url)
+    query = parse_qs(parts.query)
+    if not query.get("list"):
+        return False
+    if query.get("v"):
+        return True
+    return (parts.hostname or "").lower() == "youtu.be" and bool(parts.path.strip("/"))
 
 
 def validate_url(raw: str, resolver=socket.getaddrinfo) -> str:

@@ -43,7 +43,7 @@ async def harness(config, fake_env):
     await engine.dispose()
 
 
-async def _queued_job(repo: DownloadRepo, output_dir: Path) -> str:
+async def _queued_job(repo: DownloadRepo, output_dir: Path, **spec) -> str:
     output_dir.mkdir(parents=True, exist_ok=True)
     job_id = str(uuid.uuid4())
     await repo.create(
@@ -58,6 +58,7 @@ async def _queued_job(repo: DownloadRepo, output_dir: Path) -> str:
             "filename_template": "%(title)s.%(ext)s",
             "selector": "18",
             "preset_key": "best_1080",
+            **spec,
         },
     )
     return job_id
@@ -113,3 +114,32 @@ async def test_cancel_then_retry_while_queued_completes_once(harness, media_root
 
     assert runner.starts == [job_id]
     assert (await repo.get(job_id)).status == Status.COMPLETED.value
+
+
+async def test_retry_revalidates_with_the_jobs_browser_cookies(
+    harness, media_roots, fake_env, tmp_path
+):
+    repo, manager, runner = harness
+    log_path = tmp_path / "argv.log"
+    fake_env.setenv("FAKE_ARGV_LOG", str(log_path))
+    job_id = await _queued_job(
+        repo, media_roots / "Videos" / "Tube", cookies_from_browser="firefox"
+    )
+
+    fake_env.setenv("FAKE_EXIT", "1")
+    await manager._run(job_id)
+    assert (await repo.get(job_id)).status == Status.FAILED.value
+
+    fake_env.delenv("FAKE_EXIT")
+    await manager.retry(job_id)  # re-extracts the video before downloading again
+    await manager._run(job_id)
+
+    row = await repo.get(job_id)
+    assert row.status == Status.COMPLETED.value
+    assert row.job_spec["revalidate"] is False
+    assert runner.starts == [job_id, job_id]
+    lines = log_path.read_text().splitlines()
+    probes = [line for line in lines if " -J " in f" {line} "]
+    assert len(probes) == 1
+    assert "--cookies-from-browser firefox" in probes[0]
+    assert all("--cookies-from-browser firefox" in line for line in lines)
