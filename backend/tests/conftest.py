@@ -39,6 +39,8 @@ def config(tmp_path: Path, media_roots: Path) -> Config:
 @pytest.fixture
 def fake_env(monkeypatch):
     monkeypatch.setenv("FAKE_YTDLP_INFO", str(FAKES / "info.json"))
+    monkeypatch.setenv("FAKE_YTDLP_PLAYLIST_INFO", str(FAKES / "playlist.json"))
+    monkeypatch.setenv("FAKE_YTDLP_CHANNEL_INFO", str(FAKES / "channel.json"))
     monkeypatch.setenv("FAKE_DELAY", "0")
     monkeypatch.delenv("FAKE_NO_OUTPUT", raising=False)
     monkeypatch.delenv("FAKE_EXIT", raising=False)

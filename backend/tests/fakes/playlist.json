@@ -1,0 +1,30 @@
+{
+  "_type": "playlist",
+  "id": "PLtest123",
+  "title": "Test Playlist",
+  "uploader": "Tester",
+  "channel_id": "UCtester",
+  "uploader_id": "@tester",
+  "playlist_count": 8,
+  "extractor": "youtube:tab",
+  "extractor_key": "YoutubeTab",
+  "webpage_url": "https://www.youtube.com/playlist?list=PLtest123",
+  "thumbnails": [],
+  "entries": [
+    {"_type": "url", "ie_key": "Youtube", "id": "vid001", "title": "First Video",
+     "url": "https://www.youtube.com/watch?v=vid001", "duration": 61},
+    {"_type": "url", "ie_key": "Youtube", "id": "vid002", "title": "Second Video",
+     "url": "https://www.youtube.com/watch?v=vid002", "duration": 125.0},
+    {"_type": "url", "ie_key": "Youtube", "id": "vid001", "title": "First Video",
+     "url": "https://www.youtube.com/watch?v=vid001", "duration": 61},
+    {"_type": "url", "ie_key": "Youtube", "id": "vidpriv", "title": "[Private video]",
+     "url": "https://www.youtube.com/watch?v=vidpriv", "duration": null},
+    null,
+    {"_type": "url", "ie_key": "Youtube", "id": "vidsoon", "title": "Premiere",
+     "url": "https://www.youtube.com/watch?v=vidsoon", "live_status": "is_upcoming"},
+    {"_type": "url", "ie_key": "Generic", "id": "local", "title": "Local file",
+     "url": "file:///etc/passwd"},
+    {"_type": "url", "ie_key": "Youtube", "id": "vid003", "title": "Third Video",
+     "url": "https://www.youtube.com/shorts/vid003", "duration": null}
+  ]
+}

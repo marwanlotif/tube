@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -33,7 +33,15 @@ class PresetOut(BaseModel):
     selector_label: str | None = None
 
 
+# Response models whose defaults are always present in the payload; marking them required
+# keeps generated client types precise (e.g. ``kind`` can be used to narrow the union).
+_RESPONSE_CONFIG = ConfigDict(json_schema_serialization_defaults_required=True)
+
+
 class VideoInfoOut(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    kind: Literal["video"] = "video"
     id: str
     site: str | None = None
     title: str
@@ -44,10 +52,44 @@ class VideoInfoOut(BaseModel):
     is_live: bool = False
     formats: list[FormatOut]
     presets: list[PresetOut]
+    playlist_hint: bool = False
+
+
+class CollectionEntryOut(BaseModel):
+    id: str
+    index: int
+    title: str
+    url: str | None = None
+    duration_s: int | None = None
+    kind: Literal["video", "collection"]
+    available: bool
+    reason: str | None = None
+
+
+class CollectionInfoOut(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    kind: Literal["collection"] = "collection"
+    id: str
+    collection_type: Literal["playlist", "channel"]
+    title: str
+    uploader: str | None = None
+    site: str | None = None
+    webpage_url: str
+    thumbnail_url: str | None = None
+    total: int | None = None
+    truncated: bool = False
+    max_entries: int
+    entries: list[CollectionEntryOut]
+    presets: list[PresetOut]
+
+
+ProbeOut = Annotated[VideoInfoOut | CollectionInfoOut, Field(discriminator="kind")]
 
 
 class VideoInfoRequest(BaseModel):
     url: str
+    playlist: bool = False
 
 
 class DownloadCreate(BaseModel):

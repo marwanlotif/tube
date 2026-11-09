@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -18,6 +19,7 @@ class Config(BaseSettings):
     ytdlp_path: str | None = None
     ffmpeg_path: str | None = None
     max_concurrent_downloads: int = 1
+    max_collection_entries: int = Field(default=500, ge=1, le=5000)
     open_browser: bool = True
     dev_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     allowed_hosts: str = "localhost,127.0.0.1,[::1],testserver"

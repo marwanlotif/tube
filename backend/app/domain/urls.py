@@ -1,6 +1,6 @@
 import ipaddress
 import socket
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from app.core.errors import AppError
 
@@ -36,6 +36,21 @@ def assert_public_host(hostname: str, resolver=socket.getaddrinfo) -> None:
             continue
         if _ip_is_blocked(ip):
             raise AppError("INVALID_URL", "Private or local addresses are not allowed")
+
+
+def looks_like_playlist_member(url: str) -> bool:
+    """A link to one video that also names a playlist.
+
+    YouTube puts the video in the query (``watch?v=…&list=…``) or, for ``youtu.be`` short
+    links, in the path (``youtu.be/<id>?list=…``).
+    """
+    parts = urlsplit(url)
+    query = parse_qs(parts.query)
+    if not query.get("list"):
+        return False
+    if query.get("v"):
+        return True
+    return (parts.hostname or "").lower() == "youtu.be" and bool(parts.path.strip("/"))
 
 
 def validate_url(raw: str, resolver=socket.getaddrinfo) -> str:
