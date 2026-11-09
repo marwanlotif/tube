@@ -215,7 +215,10 @@ def resolve_preset(options: list[FormatOption], key: str) -> ResolvedSelection |
     combined = [f for f in options if f.kind == "combined"]
 
     if key == "audio":
-        audio = _best_audio(audios, prefer_aac=False)
+        # Without an audio-only stream, yt-dlp extracts the audio from a combined format.
+        audio = _best_audio(audios, prefer_aac=False) or max(
+            combined, key=lambda c: (c.abr or 0, c.tbr or 0), default=None
+        )
         if audio is None:
             return None
         return ResolvedSelection(
@@ -299,13 +302,22 @@ PRESET_LABELS = {
 PRESET_KEYS = list(PRESET_LABELS)
 
 
+# WebM needs a VP9/AV1 stream that many videos lack, so it is not offered before formats
+# are known. Audio can always come from a combined format; "up to" presets fall back to the
+# best lower resolution.
+LISTING_PRESETS = frozenset(PRESET_KEYS) - {"webm_1080"}
+
+
 def preset_choices() -> list[dict]:
     """Presets offered before any formats are known, e.g. for a whole playlist.
 
-    Each item resolves its preset when its job runs; "up to" presets fall back to the best
-    lower resolution, so they are all offered as available.
+    Each item resolves its preset when its job runs, so only ``LISTING_PRESETS`` are
+    offered as available.
     """
-    return [{"key": key, "label": label, "available": True} for key, label in PRESET_LABELS.items()]
+    return [
+        {"key": key, "label": label, "available": key in LISTING_PRESETS}
+        for key, label in PRESET_LABELS.items()
+    ]
 
 
 def preset_list(options: list[FormatOption]) -> list[dict]:
