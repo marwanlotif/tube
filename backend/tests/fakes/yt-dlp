@@ -23,7 +23,7 @@ if [ "$probe" = "1" ]; then
   # naming both a video and a playlist is the video unless --yes-playlist is given.
   case "$url" in
     *"/@"*) cat "${FAKE_YTDLP_CHANNEL_INFO:?FAKE_YTDLP_CHANNEL_INFO not set}" ;;
-    *"watch?"*"list="*)
+    *"watch?"*"list="* | *"youtu.be/"?*"list="*)
       if [ "$yes_playlist" = "1" ]; then
         cat "${FAKE_YTDLP_PLAYLIST_INFO:?FAKE_YTDLP_PLAYLIST_INFO not set}"
       else
