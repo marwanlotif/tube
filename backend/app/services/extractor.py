@@ -34,34 +34,38 @@ class Extractor:
         self.binary = binary
         self.thumbnails_dir = thumbnails_dir
         self.timeout = timeout
-        self._cache: dict[str, tuple[float, VideoInfo]] = {}
-        self._locks: dict[str, asyncio.Lock] = {}
+        # Keyed by (url, cookie source): a signed-in extraction can expose different formats.
+        self._cache: dict[tuple[str, str | None], tuple[float, VideoInfo]] = {}
+        self._locks: dict[tuple[str, str | None], asyncio.Lock] = {}
 
-    def cached(self, url: str) -> VideoInfo | None:
-        hit = self._cache.get(url)
+    def cached(self, url: str, cookies_from_browser: str | None = None) -> VideoInfo | None:
+        hit = self._cache.get((url, cookies_from_browser))
         if hit and time.monotonic() - hit[0] < CACHE_TTL:
             return hit[1]
         return None
 
-    async def extract(self, url: str, force: bool = False) -> VideoInfo:
+    async def extract(
+        self, url: str, force: bool = False, cookies_from_browser: str | None = None
+    ) -> VideoInfo:
+        key = (url, cookies_from_browser)
         if not force:
-            hit = self.cached(url)
+            hit = self.cached(*key)
             if hit:
                 return hit
-        lock = self._locks.setdefault(url, asyncio.Lock())
+        lock = self._locks.setdefault(key, asyncio.Lock())
         async with lock:
             if not force:
-                hit = self.cached(url)
+                hit = self.cached(*key)
                 if hit:
                     return hit
-            info = await self._extract(url)
-            self._cache[url] = (time.monotonic(), info)
+            info = await self._extract(url, cookies_from_browser)
+            self._cache[key] = (time.monotonic(), info)
             return info
 
-    async def _extract(self, url: str) -> VideoInfo:
+    async def _extract(self, url: str, cookies_from_browser: str | None) -> VideoInfo:
         try:
             proc = await asyncio.create_subprocess_exec(
-                *info_argv(self.binary, url),
+                *info_argv(self.binary, url, cookies_from_browser),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )

@@ -197,3 +197,27 @@ def test_stats_and_system(client):
     assert client.get("/api/system").json()["ytdlp_ok"] is True
     stats = client.get("/api/stats").json()
     assert "disk_free" in stats and stats["disk_free"] > 0
+
+
+def _info_calls(log_path) -> list[str]:
+    if not log_path.exists():
+        return []
+    return [line for line in log_path.read_text().splitlines() if " -J " in f" {line} "]
+
+
+def test_info_extraction_uses_browser_cookies_from_settings(client, fake_env, tmp_path):
+    log_path = tmp_path / "argv.log"
+    fake_env.setenv("FAKE_ARGV_LOG", str(log_path))
+
+    assert client.post("/api/videos/info", json={"url": INFO_URL}).status_code == 200
+    assert "--cookies-from-browser" not in _info_calls(log_path)[-1]
+
+    settings = client.get("/api/settings").json()
+    settings["cookies_from_browser"] = "firefox"
+    assert client.put("/api/settings", json=settings).status_code == 200
+
+    # A different cookie source must not be served from the anonymous cache entry.
+    assert client.post("/api/videos/info", json={"url": INFO_URL}).status_code == 200
+    calls = _info_calls(log_path)
+    assert len(calls) == 2
+    assert "--cookies-from-browser firefox" in calls[-1]

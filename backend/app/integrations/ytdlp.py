@@ -75,8 +75,8 @@ class Binaries:
         return self.ffmpeg
 
 
-def info_argv(binary: str, url: str) -> list[str]:
-    return [
+def info_argv(binary: str, url: str, cookies_from_browser: str | None = None) -> list[str]:
+    argv = [
         binary,
         "--ignore-config",
         "-J",
@@ -84,8 +84,11 @@ def info_argv(binary: str, url: str) -> list[str]:
         "--no-warnings",
         "--socket-timeout",
         "20",
-        url,
     ]
+    if cookies_from_browser:
+        argv += ["--cookies-from-browser", cookies_from_browser]
+    argv.append(url)
+    return argv
 
 
 def download_argv(binary: str, ffmpeg: str | None, spec: dict) -> list[str]:

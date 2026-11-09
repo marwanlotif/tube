@@ -5,6 +5,7 @@ import pytest
 from app.core.errors import AppError
 from app.domain.naming import DEFAULT_TEMPLATE, validate_template
 from app.domain.urls import validate_url
+from app.integrations.ytdlp import info_argv
 
 
 def public_resolver(*args, **kwargs):
@@ -49,3 +50,14 @@ def test_template_accepts_default_and_rejects_paths():
 def test_template_rejects_unsafe_values(template):
     with pytest.raises(AppError):
         validate_template(template)
+
+
+def test_info_argv_adds_cookies_only_when_configured():
+    plain = info_argv("yt-dlp", "https://example.com/v")
+    assert "--cookies-from-browser" not in plain
+    assert plain[-1] == "https://example.com/v"
+
+    signed_in = info_argv("yt-dlp", "https://example.com/v", "firefox")
+    index = signed_in.index("--cookies-from-browser")
+    assert signed_in[index + 1] == "firefox"
+    assert signed_in[-1] == "https://example.com/v"
