@@ -7,13 +7,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-from app.api.routes import downloads, media, settings, system, videos, ws
+from app.api.routes import collections, downloads, media, settings, system, videos, ws
 from app.core.config import Config, get_config
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import setup_logging
 from app.core.security import origin_allowed
 from app.db.engine import init_db, make_engine, make_sessionmaker
-from app.db.repos import DownloadRepo, SettingsRepo
+from app.db.repos import CollectionRepo, DownloadRepo, SettingsRepo
 from app.integrations.ytdlp import Binaries
 from app.services.download_manager import DownloadManager
 from app.services.events import EventBus
@@ -37,6 +37,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         sessions = make_sessionmaker(engine)
         repo = DownloadRepo(sessions)
         settings_repo = SettingsRepo(sessions)
+        collection_repo = CollectionRepo(sessions)
         binaries = Binaries(config)
         await binaries.probe()
         extractor = Extractor(
@@ -46,11 +47,14 @@ def create_app(config: Config | None = None) -> FastAPI:
         )
         runner = Runner(binaries.ytdlp or "yt-dlp", binaries.ffmpeg)
         events = EventBus()
-        manager = DownloadManager(config, repo, settings_repo, extractor, runner, events)
+        manager = DownloadManager(
+            config, repo, settings_repo, extractor, runner, events, collection_repo
+        )
 
         app.state.config = config
         app.state.repo = repo
         app.state.settings_repo = settings_repo
+        app.state.collections = collection_repo
         app.state.binaries = binaries
         app.state.extractor = extractor
         app.state.events = events
@@ -100,6 +104,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.add_exception_handler(AppError, app_error_handler)
     app.include_router(videos.router)
     app.include_router(downloads.router)
+    app.include_router(collections.router)
     app.include_router(settings.router)
     app.include_router(system.router)
     app.include_router(media.router)

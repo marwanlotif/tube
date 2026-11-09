@@ -8,13 +8,25 @@ from fastapi.responses import Response
 from app.core.errors import AppError
 from app.domain.enums import Status
 from app.domain.urls import validate_url
-from app.schemas.serialize import download_out
+from app.schemas.serialize import collection_out, download_out
 from app.schemas.video import DownloadCreate, DownloadList, DownloadOut
 from app.services.job_spec import job_options, needs_ffmpeg
 from app.services.settings import load_settings
 from app.services.storage import reveal_file, safe_delete_file
 
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
+
+
+async def _collection_item_removed(state, collection_id: str) -> None:
+    """Drop a collection once its last item is gone, otherwise refresh its summary."""
+    if await state.collections.delete_if_empty(collection_id):
+        await state.events.broadcast({"type": "collection.deleted", "id": collection_id})
+        return
+    summary = await state.collections.summary(collection_id)
+    if summary:
+        await state.events.broadcast(
+            {"type": "collection.updated", "collection": collection_out(summary)}
+        )
 
 
 @router.post("", response_model=DownloadOut, status_code=202)
@@ -96,6 +108,10 @@ async def list_downloads(
     status: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    collection_id: str | None = Query(default=None),
+    standalone: bool = Query(
+        default=False, description="Only downloads that are not part of a collection"
+    ),
 ) -> dict:
     state = request.app.state
     parsed: Status | None = None
@@ -104,10 +120,11 @@ async def list_downloads(
             parsed = Status(status)
         except ValueError as exc:
             raise AppError("INVALID_STATUS", f"Unknown status: {status}", 422) from exc
-    rows = await state.repo.list_rows(status=parsed, limit=limit, offset=offset)
+    filters = {"collection_id": collection_id, "standalone": standalone}
+    rows = await state.repo.list_rows(status=parsed, limit=limit, offset=offset, **filters)
     return {
         "items": [download_out(row) for row in rows],
-        "total": await state.repo.count(parsed),
+        "total": await state.repo.count(parsed, **filters),
     }
 
 
@@ -160,6 +177,8 @@ async def delete_download(
         safe_delete_file(row.output_path, state.config.media_roots)
     await state.repo.delete(download_id)
     await state.events.broadcast({"type": "download.deleted", "id": download_id})
+    if row.collection_id:
+        await _collection_item_removed(state, row.collection_id)
     await state.events.broadcast({"type": "stats.updated"})
     return Response(status_code=204)
 
