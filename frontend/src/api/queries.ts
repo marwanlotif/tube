@@ -4,20 +4,40 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import { removeCollection, upsertCollection } from "@/realtime/cache";
+
 import { api } from "./client";
-import type { CreateDownload, DownloadList, Settings } from "./models";
+import type {
+  Collection,
+  CollectionList,
+  CreateCollection,
+  CreateDownload,
+  DownloadFilter,
+  Settings,
+} from "./models";
 
 export const queryKeys = {
+  /** Prefix shared by every download list, whatever its filter. */
   downloads: ["downloads"] as const,
+  downloadList: (filter: DownloadFilter = {}) => ["downloads", filter] as const,
+  collections: ["collections"] as const,
   stats: ["stats"] as const,
   settings: ["settings"] as const,
   system: ["system"] as const,
 };
 
-export function useDownloads() {
+export function useDownloads(filter: DownloadFilter = {}, options: { enabled?: boolean } = {}) {
   return useQuery({
-    queryKey: queryKeys.downloads,
-    queryFn: api.listDownloads,
+    queryKey: queryKeys.downloadList(filter),
+    queryFn: () => api.listDownloads(filter),
+    enabled: options.enabled ?? true,
+  });
+}
+
+export function useCollections() {
+  return useQuery({
+    queryKey: queryKeys.collections,
+    queryFn: api.listCollections,
   });
 }
 
@@ -42,16 +62,6 @@ export function useSystem() {
     queryFn: api.getSystem,
     staleTime: 60_000,
   });
-}
-
-function patchDownloadList(
-  queryClient: ReturnType<typeof useQueryClient>,
-  updater: (list: DownloadList) => DownloadList,
-) {
-  queryClient.setQueriesData<DownloadList>(
-    { queryKey: queryKeys.downloads },
-    (old) => (old ? updater(old) : old),
-  );
 }
 
 export function useCreateDownload() {
@@ -89,6 +99,56 @@ export function useDeleteDownload() {
   });
 }
 
+function storeCollection(
+  queryClient: ReturnType<typeof useQueryClient>,
+  collection: Collection,
+) {
+  queryClient.setQueryData<CollectionList>(queryKeys.collections, (old) =>
+    old ? upsertCollection(old, collection) : old,
+  );
+}
+
+export function useCreateCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateCollection) => api.createCollection(payload),
+    onSuccess: ({ collection }) => {
+      storeCollection(queryClient, collection);
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+    },
+  });
+}
+
+export function useCollectionAction(action: "cancel" | "retry") {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      action === "cancel" ? api.cancelCollection(id) : api.retryCollection(id),
+    onSuccess: (collection) => {
+      storeCollection(queryClient, collection);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.downloadList({ collectionId: collection.id }),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+    },
+  });
+}
+
+export function useDeleteCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, deleteFiles }: { id: string; deleteFiles: boolean }) =>
+      api.removeCollection(id, deleteFiles),
+    onSuccess: (_, { id }) => {
+      queryClient.setQueryData<CollectionList>(queryKeys.collections, (old) =>
+        old ? removeCollection(old, id) : old,
+      );
+      queryClient.removeQueries({ queryKey: queryKeys.downloadList({ collectionId: id }) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+    },
+  });
+}
+
 export function useSaveSettings() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -99,5 +159,3 @@ export function useSaveSettings() {
     },
   });
 }
-
-export { patchDownloadList };

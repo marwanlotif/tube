@@ -33,6 +33,7 @@ run: $(DIST)
 test:
 	cd backend && uv run pytest -q
 	cd backend && uv run ruff check app
+	cd frontend && npm test
 
 lint:
 	cd backend && uv run ruff check app
