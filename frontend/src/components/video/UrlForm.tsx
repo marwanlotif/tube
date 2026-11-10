@@ -1,34 +1,31 @@
-import { useMutation } from "@tanstack/react-query";
 import { ArrowRight, Link2, Loader2, X } from "lucide-react";
-import { useState } from "react";
 
-import { api } from "@/api/client";
-import type { VideoInfo } from "@/api/models";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { errorMessage } from "@/lib/utils";
 
+/** The link field. The page owns the probe so it can also open links itself. */
 export function UrlForm({
-  onLoaded,
-  busy,
+  url,
+  onUrlChange,
+  onSubmit,
+  onClear,
+  loading,
+  error,
 }: {
-  onLoaded: (video: VideoInfo) => void;
-  busy?: boolean;
+  url: string;
+  onUrlChange: (url: string) => void;
+  onSubmit: (url: string) => void;
+  onClear: () => void;
+  loading: boolean;
+  error: unknown;
 }) {
-  const [url, setUrl] = useState("");
-  const mutation = useMutation({
-    mutationFn: api.videoInfo,
-    onSuccess: onLoaded,
-  });
-
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     const trimmed = url.trim();
     if (!trimmed) return;
-    mutation.mutate(trimmed);
+    onSubmit(trimmed);
   };
-
-  const loading = mutation.isPending || busy;
 
   return (
     <form onSubmit={submit} className="w-full">
@@ -40,10 +37,7 @@ export function UrlForm({
           />
           <Input
             value={url}
-            onChange={(event) => {
-              setUrl(event.target.value);
-              if (mutation.isError) mutation.reset();
-            }}
+            onChange={(event) => onUrlChange(event.target.value)}
             placeholder="https://www.youtube.com/watch?v=..."
             aria-label="Video URL"
             inputMode="url"
@@ -55,10 +49,7 @@ export function UrlForm({
             <button
               type="button"
               aria-label="Clear URL"
-              onClick={() => {
-                setUrl("");
-                mutation.reset();
-              }}
+              onClick={onClear}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-faint transition-colors hover:bg-white/5 hover:text-ink"
             >
               <X size={15} />
@@ -68,7 +59,7 @@ export function UrlForm({
         <Button type="submit" size="lg" disabled={loading || !url.trim()} className="h-12 px-6">
           {loading ? (
             <>
-              <Loader2 size={16} className="animate-spin" /> Reading video
+              <Loader2 size={16} className="animate-spin" /> Reading link
             </>
           ) : (
             <>
@@ -77,9 +68,7 @@ export function UrlForm({
           )}
         </Button>
       </div>
-      {mutation.isError ? (
-        <p className="mt-2 text-sm text-danger">{errorMessage(mutation.error)}</p>
-      ) : null}
+      {error ? <p className="mt-2 text-sm text-danger">{errorMessage(error)}</p> : null}
     </form>
   );
 }

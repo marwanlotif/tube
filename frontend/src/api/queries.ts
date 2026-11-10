@@ -64,6 +64,13 @@ export function useSystem() {
   });
 }
 
+export function useProbe() {
+  return useMutation({
+    mutationFn: ({ url, playlist = false }: { url: string; playlist?: boolean }) =>
+      api.probe(url, playlist),
+  });
+}
+
 export function useCreateDownload() {
   const queryClient = useQueryClient();
   return useMutation({
